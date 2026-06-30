@@ -2,11 +2,16 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+  weight: ['400', '500', '600', '700', '800'],
+})
 
 export const metadata: Metadata = {
-  title: 'EmployTeens — Jobs for NY/NJ Teens',
-  description: 'AI-powered job discovery for teens 14–19 in New York and New Jersey. No searching, just matches.',
+  title: 'EmployTeens — AI Job Matches for NY/NJ Teens',
+  description: 'AI finds jobs that fit your schedule, location, and age. Built for teens 14–19 in New York and New Jersey.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -21,10 +26,11 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#3B82F6',
+  themeColor: '#2563EB',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -33,8 +39,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className="bg-[#FAFAFA] text-[#111111] antialiased font-sans">
+      <body className="antialiased">
         {children}
       </body>
     </html>

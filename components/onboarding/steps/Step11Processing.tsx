@@ -4,21 +4,23 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useOnboardingStore } from '@/lib/store/onboarding-store'
 import { createClient } from '@/lib/supabase/client'
+import { serializeTransportation, serializeInterests } from '@/lib/types/onboarding'
 
 const AI_STEPS = [
-  { text: 'Building your profile…', duration: 1200 },
-  { text: 'Scanning jobs in your area…', duration: 1400 },
-  { text: 'Analyzing employer reliability…', duration: 1200 },
-  { text: 'Matching your schedule…', duration: 1400 },
-  { text: 'Scoring for teen-friendliness…', duration: 1200 },
-  { text: 'Ranking your top matches…', duration: 1000 },
-  { text: 'Your feed is ready!', duration: 800 },
+  { text: 'Building your profile…', duration: 1100 },
+  { text: 'Scanning jobs in your area…', duration: 1300 },
+  { text: 'Analyzing your schedule…', duration: 1100 },
+  { text: 'Matching your interests…', duration: 1200 },
+  { text: 'Scoring employer reliability…', duration: 1000 },
+  { text: 'Ranking your top matches…', duration: 900 },
+  { text: 'Your feed is ready!', duration: 700 },
 ]
 
 export function Step11Processing() {
   const store = useOnboardingStore()
   const [currentStep, setCurrentStep] = useState(0)
   const [done, setDone] = useState(false)
+  const [saveError, setSaveError] = useState(false)
 
   useEffect(() => {
     let elapsed = 0
@@ -35,9 +37,7 @@ export function Step11Processing() {
       elapsed += step.duration
     })
 
-    // Save profile to Supabase in background
     saveProfile()
-
     return () => timers.forEach(clearTimeout)
   }, [])
 
@@ -47,97 +47,125 @@ export function Step11Processing() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Upload resume if present
+      // Upload resume if file present
       let resume_url = store.resume_url
       if (store.resume_file) {
         const ext = store.resume_file.name.split('.').pop()
         const path = `resumes/${user.id}.${ext}`
-        const { data } = await supabase.storage
+        const { data: uploadData } = await supabase.storage
           .from('resumes')
           .upload(path, store.resume_file, { upsert: true })
-        if (data) {
+        if (uploadData) {
           const { data: urlData } = supabase.storage.from('resumes').getPublicUrl(path)
           resume_url = urlData.publicUrl
+          store.setResumeUrl(resume_url)
         }
       }
 
-      await supabase.from('users').upsert({
+      // Serialize multi-select fields to JSON strings (no DB migration needed)
+      const transportationSerialized = serializeTransportation(store.transportation)
+      const interestsSerialized = serializeInterests(store.interests)
+      // Skills and languages stay as plain string arrays (JSONB in DB)
+      const skillNames = store.skills
+      const languageNames = store.languages
+
+      const { error } = await supabase.from('users').upsert({
         id: user.id,
         name: store.name,
         age: store.age!,
         state: store.state,
         zip_code: store.zip_code,
-        transportation: store.transportation,
+        transportation: transportationSerialized,
         school_grade: store.school_grade,
         school_end_time: store.school_end_time,
         availability: store.availability,
-        skills: store.skills,
-        interests: store.interests,
+        skills: skillNames,
+        interests: interestsSerialized,   // JSON string of WeightedInterest[]
         resume_url,
         onboarding_completed: true,
       })
 
-      store.setResumeUrl(resume_url)
+      if (error) {
+        console.error('[Profile save]', error)
+        setSaveError(true)
+      }
     } catch (err) {
-      console.error('Profile save error:', err)
+      console.error('[Profile save exception]', err)
+      setSaveError(true)
     }
   }
 
   useEffect(() => {
-    if (done) {
-      store.nextStep()
-    }
-  }, [done, store])
+    if (done) store.nextStep()
+  }, [done])
 
   const progress = ((currentStep + 1) / AI_STEPS.length) * 100
+  const r = 38
+  const circ = 2 * Math.PI * r
 
   return (
     <div className="w-full max-w-sm flex flex-col items-center gap-10">
-      {/* Animated logo */}
+      {/* Animated logo mark */}
       <motion.div
-        animate={{ scale: [1, 1.08, 1], rotate: [0, 3, -3, 0] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-        className="w-20 h-20 rounded-3xl bg-[#3B82F6] flex items-center justify-center shadow-xl shadow-blue-200"
+        animate={{ scale: [1, 1.06, 1] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <span className="text-white text-3xl font-bold">ET</span>
+        <svg width="72" height="72" viewBox="0 0 52 52" fill="none">
+          <defs>
+            <linearGradient id="procLg" x1="0" y1="0" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#2563EB" />
+              <stop offset="1" stopColor="#7C3AED" />
+            </linearGradient>
+          </defs>
+          <rect width="52" height="52" rx="16" fill="url(#procLg)" />
+          <path d="M29 9L17 28H25L23 43L35 24H27L29 9Z" fill="white" fillOpacity="0.95" />
+        </svg>
       </motion.div>
 
       {/* Progress ring */}
-      <div className="relative w-24 h-24">
-        <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
-          <circle cx="48" cy="48" r="40" fill="none" stroke="#E5E7EB" strokeWidth="6" />
+      <div className="relative" style={{ width: 96, height: 96 }}>
+        <svg width="96" height="96" viewBox="0 0 96 96" style={{ transform: 'rotate(-90deg)' }}>
+          <defs>
+            <linearGradient id="procRing" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop stopColor="#2563EB" />
+              <stop offset="1" stopColor="#7C3AED" />
+            </linearGradient>
+          </defs>
+          <circle cx="48" cy="48" r={r} fill="none" stroke="var(--et-ground)" strokeWidth="6" />
           <motion.circle
-            cx="48" cy="48" r="40"
+            cx="48" cy="48" r={r}
             fill="none"
-            stroke="#3B82F6"
+            stroke="url(#procRing)"
             strokeWidth="6"
             strokeLinecap="round"
-            strokeDasharray={251.2}
-            animate={{ strokeDashoffset: 251.2 * (1 - progress / 100) }}
+            strokeDasharray={circ}
+            animate={{ strokeDashoffset: circ * (1 - progress / 100) }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-lg font-bold text-[#111111]">{Math.round(progress)}%</span>
+          <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--et-ink)' }}>
+            {Math.round(progress)}%
+          </span>
         </div>
       </div>
 
-      {/* AI state text */}
+      {/* Status text */}
       <AnimatePresence mode="wait">
         <motion.p
           key={currentStep}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.3 }}
-          className="text-center text-lg font-medium text-[#111111]"
+          transition={{ duration: 0.25 }}
+          style={{ fontSize: '17px', fontWeight: 600, color: 'var(--et-ink)', textAlign: 'center', letterSpacing: '-0.01em' }}
         >
           {AI_STEPS[currentStep]?.text}
         </motion.p>
       </AnimatePresence>
 
-      <p className="text-sm text-[#9CA3AF] text-center">
-        This only takes a few seconds…
+      <p style={{ fontSize: '13px', color: 'var(--et-placeholder)', textAlign: 'center' }}>
+        {saveError ? 'Saving profile… one moment.' : 'This only takes a few seconds…'}
       </p>
     </div>
   )

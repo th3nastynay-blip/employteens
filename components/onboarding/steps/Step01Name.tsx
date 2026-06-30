@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useOnboardingStore } from '@/lib/store/onboarding-store'
 
 export function Step01Name() {
@@ -17,43 +17,42 @@ export function Step01Name() {
   return (
     <div className="w-full max-w-sm flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <p className="text-[#6B7280] text-sm font-medium uppercase tracking-wider">Step 1 of 12</p>
-        <h2 className="text-3xl font-bold text-[#111111] leading-tight">
-          What&apos;s your first name?
-        </h2>
+        <p className="section-label" style={{ color: 'var(--et-blue)' }}>Step 1 of 11</p>
+        <h2 className="text-h1" style={{ color: 'var(--et-ink)' }}>What&apos;s your first name?</h2>
       </div>
 
-      <motion.input
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+      <input
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleContinue()}
         placeholder="Your name"
         autoFocus
-        className="h-16 bg-white border-2 border-gray-100 rounded-2xl px-5 text-2xl font-semibold text-[#111111] placeholder-gray-300 focus:outline-none focus:border-[#3B82F6] transition-colors"
+        className="input"
+        style={{ height: 60, fontSize: '22px', fontWeight: 700, letterSpacing: '-0.02em' }}
       />
 
-      {value.trim() && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-[#6B7280] text-base"
-        >
-          Hey {value.trim()}! Let&apos;s find you a job. 👋
-        </motion.p>
-      )}
+      <AnimatePresence>
+        {value.trim() && (
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            style={{ fontSize: '15px', color: 'var(--et-muted)' }}
+          >
+            Hey {value.trim()}! Let&apos;s find you a job. 👋
+          </motion.p>
+        )}
+      </AnimatePresence>
 
-      <motion.button
-        whileTap={{ scale: 0.97 }}
+      <button
         onClick={handleContinue}
         disabled={!value.trim()}
-        className="w-full h-14 bg-[#3B82F6] text-white rounded-2xl font-semibold text-base shadow-lg shadow-blue-200 disabled:opacity-40 disabled:shadow-none transition-all"
+        className="btn-primary w-full"
+        style={{ height: 52, borderRadius: 'var(--radius-lg)', fontSize: '15px', opacity: value.trim() ? 1 : 0.4 }}
       >
         Continue
-      </motion.button>
+      </button>
     </div>
   )
 }

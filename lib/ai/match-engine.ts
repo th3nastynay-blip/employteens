@@ -1,260 +1,314 @@
 /**
- * EMPLOYTEENS — AI Match Engine
- * Scores jobs 0-100 for a specific user based on:
- * - Age compatibility (highest weight: 30%)
- * - Schedule overlap (25%)
- * - Location/commute (20%)
- * - Interest alignment (15%)
- * - Experience match (10%)
+ * EMPLOYTEENS — AI Match Engine v2
+ * Scores jobs 0-100 using weighted multi-signal scoring.
+ *
+ * Weights:
+ *   Age eligibility    30%  (hard block if under min_age)
+ *   Schedule overlap   25%
+ *   Location/commute   20%
+ *   Interest alignment 15%  (weighted by user-set priority)
+ *   Experience match   10%
  */
 
 import type { UserProfile, JobRow, JobMatch } from '@/lib/types/database'
+import {
+  deserializeTransportation,
+  deserializeInterests,
+  type Transportation,
+  type WeightedInterest,
+} from '@/lib/types/onboarding'
 
-interface MatchResult {
-  match_score: number
-  match_explanation: string
-  feed_section: 'best_matches' | 'new_near_you' | 'high_probability'
+// ── Commute range per transport mode (miles) ──────────────────────────
+const TRANSPORT_RANGE: Record<Transportation, number> = {
+  walking:       1.0,
+  bike:          3.0,
+  public_transit: 10.0,
+  rideshare:     5.0,
+  car:           25.0,
+  parent_dropoff: 20.0,
 }
 
-// =============================================
-// SCORING WEIGHTS
-// =============================================
-const WEIGHTS = {
-  age_eligibility: 0.30,
-  schedule_overlap: 0.25,
-  location_commute: 0.20,
-  interest_alignment: 0.15,
-  experience_match: 0.10,
+// ── Interest → job keyword map ────────────────────────────────────────
+const INTEREST_KEYWORDS: Record<string, string[]> = {
+  'Food & Restaurants':    ['restaurant', 'food', 'pizza', 'chipotle', 'mcdonald', 'starbucks', 'barista', 'crew', 'kitchen', 'cook', 'dunkin', 'panera', 'chick-fil-a', 'burger'],
+  'Retail & Shopping':     ['retail', 'store', 'cashier', 'sales associate', 'target', 'walmart', 'mall', 'clothing', 'old navy', 'gap', 'h&m'],
+  'Sports & Fitness':      ['gym', 'fitness', 'planet fitness', 'equinox', 'crunch', 'lifeguard', 'pool', 'sport', 'recreation'],
+  'Entertainment & Movies':['amc', 'regal', 'theater', 'movie', 'entertainment', 'cinema', 'arcade', 'bowling'],
+  'Technology':            ['tech', 'computer', 'software', 'it support', 'help desk', 'developer', 'coding'],
+  'Healthcare & Childcare':['childcare', 'babysit', 'camp', 'tutor', 'aide', 'hospital', 'pharmacy', 'cvs', 'walgreens'],
+  'Arts & Music':          ['art', 'music', 'design', 'creative', 'photography', 'print', 'craft'],
+  'Outdoors & Nature':     ['outdoor', 'landscape', 'park', 'garden', 'nature', 'camp', 'trail'],
+  'Customer Service':      ['customer service', 'front desk', 'host', 'receptionist', 'call center', 'support'],
+  'Delivery & Logistics':  ['delivery', 'driver', 'logistics', 'package', 'warehouse', 'amazon', 'ups', 'fedex'],
+  'Tutoring & Education':  ['tutor', 'teacher', 'camp counselor', 'education', 'learning', 'library', 'school'],
+  'Office & Admin':        ['office', 'admin', 'clerk', 'data entry', 'receptionist', 'filing', 'assistant'],
 }
 
-// =============================================
-// AGE ELIGIBILITY SCORE (0-100)
-// =============================================
-function scoreAge(user: UserProfile, job: JobRow): number {
-  if (!user.age) return 50
-  if (user.age < job.min_age) return 0 // Hard block — ineligible
-  if (user.age >= job.min_age) return 100
-  return 50
+// ── Scoring functions ─────────────────────────────────────────────────
+
+function scoreAge(userAge: number | null, job: JobRow): number {
+  if (!userAge) return 50
+  if (userAge < job.min_age) return 0     // hard block
+  return 100
 }
 
-// =============================================
-// SCHEDULE OVERLAP SCORE (0-100)
-// =============================================
 function scoreSchedule(user: UserProfile, job: JobRow): number {
   const availability = user.availability as Record<string, boolean>
-
-  // Base: job's flexibility score
   let score = job.schedule_flexibility_score
 
-  // Boost if user has weekend availability (most teen jobs are weekend-heavy)
   const hasWeekend = availability?.saturday || availability?.sunday
   if (hasWeekend) score = Math.min(100, score + 10)
 
-  // Boost if user is available evenings (school_end_time)
-  const endHour = parseInt((user.school_end_time ?? '3:00 PM').split(':')[0])
-  const isPM = (user.school_end_time ?? '').includes('PM')
-  const endHour24 = isPM && endHour !== 12 ? endHour + 12 : endHour
+  const timeStr = user.school_end_time ?? '3:00 PM'
+  const hour = parseInt(timeStr.split(':')[0])
+  const isPM = timeStr.includes('PM')
+  const hour24 = isPM && hour !== 12 ? hour + 12 : hour
 
-  if (endHour24 <= 14) score = Math.min(100, score + 15) // Out early = more availability
-  if (endHour24 >= 17) score = Math.max(0, score - 10) // Out late = less availability
+  if (hour24 <= 14) score = Math.min(100, score + 15)  // out early
+  if (hour24 >= 17) score = Math.max(0, score - 10)    // out late
 
   return score
 }
 
-// =============================================
-// LOCATION SCORE (0-100) based on ZIP proximity
-// =============================================
-function scoreLocation(user: UserProfile, job: JobRow): number {
-  // Same ZIP = perfect
+function scoreLocation(user: UserProfile, job: JobRow, transports: Transportation[]): number {
   if (user.zip_code === job.zip_code) return 100
 
-  // Same state = decent
-  if (user.state === job.state) {
-    // Estimate proximity from ZIP prefix (rough)
-    const userPrefix = user.zip_code.slice(0, 3)
-    const jobPrefix = job.zip_code.slice(0, 3)
-    if (userPrefix === jobPrefix) return 85
-    return 65
+  // Estimate distance from ZIP prefix similarity
+  const userPfx = user.zip_code.slice(0, 3)
+  const jobPfx = job.zip_code.slice(0, 3)
+  const samePrefix = userPfx === jobPfx
+  const sameState = user.state === job.state
+
+  // Rough estimated miles based on ZIP proximity
+  const estimatedMiles = samePrefix ? 2 : sameState ? 6 : 12
+
+  if (transports.length === 0) {
+    // No transport info — use job's commute estimate
+    return Math.max(0, 100 - job.commute_estimate)
   }
 
-  // Cross-state (NY/NJ border is common and doable)
-  return 45
+  // Check if ANY transport mode can reach this job
+  const maxRange = Math.max(...transports.map((t) => TRANSPORT_RANGE[t] ?? 0))
+
+  if (estimatedMiles <= maxRange * 0.5) return 100
+  if (estimatedMiles <= maxRange) return 85
+  if (estimatedMiles <= maxRange * 1.5) return 60   // reachable but effort
+  return 35
 }
 
-// =============================================
-// INTEREST ALIGNMENT SCORE (0-100)
-// =============================================
 function scoreInterests(user: UserProfile, job: JobRow): number {
-  const userInterests = (user.interests as string[]) ?? []
+  const rawInterests = user.interests
+  const weighted: WeightedInterest[] = deserializeInterests(rawInterests)
+
+  if (weighted.length === 0) return 60
+
   const title = job.title.toLowerCase()
   const company = job.company.toLowerCase()
-  const tags = (job.tags ?? []) as string[]
 
-  const INTEREST_KEYWORDS: Record<string, string[]> = {
-    'Food & Restaurants': ['restaurant', 'food', 'pizza', 'chipotle', 'mcdonald', 'starbucks', 'barista', 'crew', 'kitchen', 'cook'],
-    'Retail & Shopping': ['retail', 'store', 'cashier', 'sales associate', 'target', 'walmart', 'mall'],
-    'Sports & Fitness': ['gym', 'fitness', 'planet fitness', 'equinox', 'crunch', 'lifeguard', 'pool'],
-    'Entertainment & Movies': ['amc', 'regal', 'theater', 'movie', 'entertainment', 'cinema'],
-    'Technology': ['tech', 'computer', 'software', 'it support', 'help desk'],
-    'Healthcare & Childcare': ['childcare', 'babysit', 'camp', 'tutor', 'aide'],
-    'Arts & Music': ['art', 'music', 'design', 'creative', 'photography'],
-    'Customer Service': ['customer service', 'front desk', 'host', 'receptionist'],
-    'Delivery & Logistics': ['delivery', 'driver', 'logistics', 'package'],
-    'Tutoring & Education': ['tutor', 'teacher', 'camp counselor', 'education'],
+  // Weighted sum: weight × match (1 if matched, 0 if not)
+  let totalWeight = 0
+  let matchedWeight = 0
+
+  for (const { name, weight } of weighted) {
+    totalWeight += weight
+    const keywords = INTEREST_KEYWORDS[name] ?? []
+    const matched = keywords.some((kw) => title.includes(kw) || company.includes(kw))
+    if (matched) matchedWeight += weight
   }
 
-  let matches = 0
-  for (const interest of userInterests) {
-    const keywords = INTEREST_KEYWORDS[interest] ?? []
-    const matched = keywords.some((kw) =>
-      title.includes(kw) || company.includes(kw)
-    )
-    if (matched) matches++
-  }
-
-  if (userInterests.length === 0) return 60
-  return Math.min(100, 50 + (matches / userInterests.length) * 50)
+  const ratio = matchedWeight / totalWeight
+  return Math.round(50 + ratio * 50)
 }
 
-// =============================================
-// EXPERIENCE MATCH SCORE (0-100)
-// =============================================
 function scoreExperience(user: UserProfile, job: JobRow): number {
-  const userExp = (user as UserProfile & { experience_required?: string }).experience_required ?? 'none'
+  // experience stored in interests/skills — check the experience field
+  const exp = (user as UserProfile & { experience?: string }).experience ?? 'none'
 
   if (job.experience_required === 'none') return 100
-  if (job.experience_required === 'preferred') {
-    if (userExp === 'none') return 75 // Still can apply
-    return 95
-  }
+  if (job.experience_required === 'preferred') return exp === 'none' ? 75 : 95
   if (job.experience_required === '1_year') {
-    if (userExp === 'none') return 45
-    if (userExp === 'some_volunteering') return 60
-    if (userExp === 'one_job') return 90
-    return 100
+    if (exp === 'none') return 45
+    if (exp === 'some_volunteering') return 65
+    return 90
   }
-
-  return 70 // default
+  return 70
 }
 
-// =============================================
-// EXPLANATION GENERATOR
-// =============================================
-function generateExplanation(
+// ── Structured explanation ────────────────────────────────────────────
+export interface MatchReason {
+  text: string
+  positive: boolean
+}
+
+function buildReasons(
   user: UserProfile,
   job: JobRow,
-  scores: Record<string, number>
-): string {
-  const parts: string[] = []
+  scores: Record<string, number>,
+  transports: Transportation[],
+): MatchReason[] {
+  const reasons: MatchReason[] = []
 
-  if (scores.schedule_overlap >= 80) {
-    parts.push(`Great schedule match for your ${user.school_end_time} dismissal`)
+  // Schedule
+  if (scores.schedule >= 80) {
+    reasons.push({ text: `Works with your ${user.school_end_time} school schedule`, positive: true })
   }
-  if (scores.age_eligibility === 100 && job.min_age <= 15) {
-    parts.push(`Hires at ${job.min_age}!`)
+
+  // Age
+  if (user.age && user.age >= job.min_age) {
+    if (job.min_age <= 15) {
+      reasons.push({ text: `Hires at age ${job.min_age} — you qualify`, positive: true })
+    } else {
+      reasons.push({ text: 'Age requirement met', positive: true })
+    }
   }
+
+  // Transport
+  if (transports.length > 0 && scores.location >= 80) {
+    const primary = transports[0]
+    const labels: Record<Transportation, string> = {
+      walking: 'walking distance',
+      bike: 'bikeable',
+      public_transit: 'reachable by transit',
+      car: 'easy drive',
+      parent_dropoff: 'easy drop-off',
+      rideshare: 'short ride',
+    }
+    reasons.push({ text: `Within ${labels[primary] ?? 'reach'} from you`, positive: true })
+  } else if (scores.location < 50) {
+    reasons.push({ text: 'Farther than your usual range', positive: false })
+  }
+
+  // Experience
+  if (job.experience_required === 'none') {
+    reasons.push({ text: 'No experience required', positive: true })
+  }
+
+  // Hiring speed
   if (job.hiring_speed_score >= 85) {
-    parts.push('known for fast hiring')
-  }
-  if (scores.interest_alignment >= 80) {
-    parts.push('matches your interests')
-  }
-  if (scores.location_commute >= 85) {
-    parts.push('very close to you')
-  }
-  if (job.schedule_flexibility_score >= 85) {
-    parts.push('flexible hours')
+    reasons.push({ text: 'Known to hire within days', positive: true })
   }
 
-  if (parts.length === 0) return `Good match based on your profile and location.`
+  // Interest match
+  if (scores.interest >= 75) {
+    const weighted = deserializeInterests(user.interests)
+    const title = job.title.toLowerCase()
+    const company = job.company.toLowerCase()
+    const matched = weighted.find(({ name }) =>
+      (INTEREST_KEYWORDS[name] ?? []).some((kw) => title.includes(kw) || company.includes(kw))
+    )
+    if (matched) {
+      reasons.push({ text: `Matches your ${matched.name} interest`, positive: true })
+    }
+  }
 
-  const first = parts[0].charAt(0).toUpperCase() + parts[0].slice(1)
-  return [first, ...parts.slice(1)].join(' · ') + '.'
+  // Teen friendly
+  if (job.teen_friendly_score >= 85) {
+    reasons.push({ text: 'Highly teen-friendly employer', positive: true })
+  }
+
+  return reasons.slice(0, 5)  // cap at 5 reasons
 }
 
-// =============================================
-// DETERMINE FEED SECTION
-// =============================================
+function shortExplanation(reasons: MatchReason[]): string {
+  const positives = reasons.filter((r) => r.positive).map((r) => r.text)
+  if (positives.length === 0) return 'Possible match based on your location.'
+  return positives[0] + (positives[1] ? ` · ${positives[1]}` : '') + '.'
+}
+
+// ── Feed section classifier ───────────────────────────────────────────
 function determineFeedSection(
   score: number,
   job: JobRow,
-  locationScore: number
-): MatchResult['feed_section'] {
+  locationScore: number,
+): 'best_matches' | 'new_near_you' | 'high_probability' {
   if (score >= 75) return 'best_matches'
   if (locationScore >= 80) return 'new_near_you'
   if (job.hiring_speed_score >= 80) return 'high_probability'
   return 'best_matches'
 }
 
-// =============================================
-// MAIN MATCH FUNCTION
-// =============================================
+// ── Main match function ───────────────────────────────────────────────
+export interface MatchResult {
+  match_score: number
+  match_explanation: string
+  match_reasons: MatchReason[]
+  feed_section: 'best_matches' | 'new_near_you' | 'high_probability'
+}
+
 export function computeMatchScore(user: UserProfile, job: JobRow): MatchResult {
-  // Hard blocks
+  // Parse multi-select transportation
+  const transports = deserializeTransportation(
+    typeof user.transportation === 'string' ? user.transportation : JSON.stringify(user.transportation)
+  )
+
+  // Hard block on age
   if (user.age && user.age < job.min_age) {
     return {
       match_score: 0,
       match_explanation: 'Age requirement not met.',
+      match_reasons: [{ text: `Requires age ${job.min_age}+`, positive: false }],
       feed_section: 'best_matches',
     }
   }
 
   const scores = {
-    age_eligibility: scoreAge(user, job),
-    schedule_overlap: scoreSchedule(user, job),
-    location_commute: scoreLocation(user, job),
-    interest_alignment: scoreInterests(user, job),
-    experience_match: scoreExperience(user, job),
+    age:      scoreAge(user.age, job),
+    schedule: scoreSchedule(user, job),
+    location: scoreLocation(user, job, transports),
+    interest: scoreInterests(user, job),
+    experience: scoreExperience(user, job),
   }
 
-  const weightedScore =
-    scores.age_eligibility * WEIGHTS.age_eligibility +
-    scores.schedule_overlap * WEIGHTS.schedule_overlap +
-    scores.location_commute * WEIGHTS.location_commute +
-    scores.interest_alignment * WEIGHTS.interest_alignment +
-    scores.experience_match * WEIGHTS.experience_match
+  const weighted =
+    scores.age        * 0.30 +
+    scores.schedule   * 0.25 +
+    scores.location   * 0.20 +
+    scores.interest   * 0.15 +
+    scores.experience * 0.10
 
-  const match_score = Math.round(Math.min(100, Math.max(0, weightedScore)))
-  const match_explanation = generateExplanation(user, job, scores)
-  const feed_section = determineFeedSection(match_score, job, scores.location_commute)
+  const match_score = Math.round(Math.min(100, Math.max(0, weighted)))
+  const reasons = buildReasons(user, job, scores, transports)
 
-  return { match_score, match_explanation, feed_section }
-}
-
-// =============================================
-// BATCH MATCH — generate full feed for a user
-// =============================================
-export function generateFeedForUser(user: UserProfile, jobs: JobRow[]): JobMatch[] {
-  const matches: JobMatch[] = []
-
-  for (const job of jobs) {
-    const { match_score, match_explanation } = computeMatchScore(user, job)
-    if (match_score === 0) continue // Skip ineligible
-
-    matches.push({
-      ...job,
-      match_score,
-      match_explanation,
-    })
-  }
-
-  // Sort by match score descending
-  return matches.sort((a, b) => b.match_score - a.match_score)
-}
-
-// =============================================
-// DAILY FEED LABELS
-// =============================================
-export function classifyFeedSections(matches: JobMatch[]): {
-  best_matches: JobMatch[]
-  new_near_you: JobMatch[]
-  high_probability: JobMatch[]
-} {
   return {
-    best_matches: matches.filter((j) => j.match_score >= 70).slice(0, 20),
-    new_near_you: matches.filter((j) => j.match_score >= 50).slice(0, 15),
-    high_probability: matches
-      .filter((j) => j.hiring_speed_score >= 80 && j.match_score >= 55)
-      .slice(0, 15),
+    match_score,
+    match_explanation: shortExplanation(reasons),
+    match_reasons: reasons,
+    feed_section: determineFeedSection(match_score, job, scores.location),
   }
+}
+
+// ── Batch match ───────────────────────────────────────────────────────
+export function generateFeedForUser(user: UserProfile, jobs: JobRow[]): JobMatch[] {
+  return jobs
+    .map((job) => {
+      const { match_score, match_explanation } = computeMatchScore(user, job)
+      return { ...job, match_score, match_explanation }
+    })
+    .filter((j) => j.match_score > 0)
+    .sort((a, b) => b.match_score - a.match_score)
+}
+
+export function classifyFeedSections(matches: JobMatch[]) {
+  return {
+    best_matches:     matches.filter((j) => j.match_score >= 70).slice(0, 20),
+    new_near_you:     matches.filter((j) => j.match_score >= 50).slice(0, 15),
+    high_probability: matches.filter((j) => j.hiring_speed_score >= 80 && j.match_score >= 55).slice(0, 15),
+  }
+}
+
+// ── No-match explanation ──────────────────────────────────────────────
+export function getNoMatchExplanation(user: UserProfile, section: string): string {
+  const weighted = deserializeInterests(user.interests)
+  const topInterest = weighted.sort((a, b) => b.weight - a.weight)[0]
+
+  if (section === 'best_matches') {
+    if (topInterest) {
+      return `There are currently few ${topInterest.name} openings near your ZIP. The jobs shown below match your schedule and transportation much better.`
+    }
+    return `No perfect matches yet — check back tomorrow as new jobs are added daily.`
+  }
+  if (section === 'new_near_you') {
+    return `No new nearby jobs today. We scan for new listings every 24 hours.`
+  }
+  return `No fast-hiring employers in your area right now. Check Best Matches for strong overall fits.`
 }

@@ -8,71 +8,93 @@ export function Step03Location() {
   const { state, zip_code, setState, setZipCode, nextStep } = useOnboardingStore()
   const [selectedState, setSelectedState] = useState<'NY' | 'NJ' | ''>(state)
   const [zip, setZip] = useState(zip_code)
+  const [zipError, setZipError] = useState('')
 
   function handleContinue() {
-    if (!selectedState || zip.length !== 5) return
-    setState(selectedState as 'NY' | 'NJ')
+    if (!selectedState) return
+    if (zip.length !== 5 || !/^\d{5}$/.test(zip)) {
+      setZipError('Enter a valid 5-digit ZIP code')
+      return
+    }
+    setState(selectedState)
     setZipCode(zip)
     nextStep()
   }
 
+  const canContinue = selectedState && zip.length === 5 && /^\d{5}$/.test(zip)
+
   return (
     <div className="w-full max-w-sm flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <p className="text-[#6B7280] text-sm font-medium uppercase tracking-wider">Step 3 of 12</p>
-        <h2 className="text-3xl font-bold text-[#111111] leading-tight">
-          Where are you located?
-        </h2>
-        <p className="text-[#6B7280] text-sm">We only show jobs near you in NY or NJ.</p>
+        <p className="section-label" style={{ color: 'var(--et-blue)' }}>Step 3 of 11</p>
+        <h2 className="text-h1" style={{ color: 'var(--et-ink)' }}>Where are you located?</h2>
+        <p style={{ fontSize: '14px', color: 'var(--et-muted)' }}>We only show jobs reachable from your ZIP code.</p>
       </div>
 
-      {/* State selector */}
-      <div className="grid grid-cols-2 gap-3">
-        {(['NY', 'NJ'] as const).map((s) => (
-          <motion.button
-            key={s}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setSelectedState(s)}
-            className={`h-16 rounded-2xl text-xl font-bold transition-all ${
-              selectedState === s
-                ? 'bg-[#3B82F6] text-white shadow-lg shadow-blue-200'
-                : 'bg-white text-[#111111] border border-gray-100 hover:border-blue-200'
-            }`}
+      {/* State picker */}
+      <div className="flex flex-col gap-3">
+        <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--et-subtle)' }}>State</p>
+        <div className="flex gap-3">
+          {(['NY', 'NJ'] as const).map((s) => {
+            const on = selectedState === s
+            return (
+              <motion.button
+                key={s}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSelectedState(s)}
+                style={{
+                  flex: 1, height: 64, borderRadius: 'var(--radius-lg)',
+                  border: on ? '2px solid var(--et-blue)' : '1.5px solid var(--et-border-mid)',
+                  background: on ? 'var(--et-blue)' : 'var(--et-surface)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'all 0.15s ease',
+                  boxShadow: on ? 'var(--shadow-blue-sm)' : 'none',
+                }}
+              >
+                <span style={{ fontSize: '20px', fontWeight: 800, color: on ? '#fff' : 'var(--et-ink)' }}>{s}</span>
+              </motion.button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ZIP code */}
+      <div className="flex flex-col gap-2">
+        <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--et-subtle)' }}>ZIP Code</p>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={zip}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 5)
+            setZip(v)
+            setZipError('')
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && handleContinue()}
+          placeholder="e.g. 10001"
+          className="input"
+          style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.08em' }}
+        />
+        {zipError && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{ fontSize: '13px', color: 'var(--et-red)', fontWeight: 500 }}
           >
-            {s === 'NY' ? '🗽 New York' : '🌿 New Jersey'}
-          </motion.button>
-        ))}
+            {zipError}
+          </motion.p>
+        )}
       </div>
 
-      {/* ZIP input */}
-      {selectedState && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col gap-2"
-        >
-          <label className="text-sm font-medium text-[#374151]">ZIP Code</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]{5}"
-            maxLength={5}
-            value={zip}
-            onChange={(e) => setZip(e.target.value.replace(/\D/g, ''))}
-            placeholder="e.g. 10001"
-            className="h-14 bg-white border-2 border-gray-100 rounded-2xl px-5 text-xl font-semibold text-[#111111] placeholder-gray-300 focus:outline-none focus:border-[#3B82F6] transition-colors tracking-widest"
-          />
-        </motion.div>
-      )}
-
-      <motion.button
-        whileTap={{ scale: 0.97 }}
+      <button
         onClick={handleContinue}
-        disabled={!selectedState || zip.length !== 5}
-        className="w-full h-14 bg-[#3B82F6] text-white rounded-2xl font-semibold text-base shadow-lg shadow-blue-200 disabled:opacity-40 disabled:shadow-none transition-all"
+        disabled={!canContinue}
+        className="btn-primary w-full"
+        style={{ height: 52, borderRadius: 'var(--radius-lg)', fontSize: '15px', opacity: canContinue ? 1 : 0.4 }}
       >
         Continue
-      </motion.button>
+      </button>
     </div>
   )
 }

@@ -5,14 +5,14 @@ import { motion } from 'framer-motion'
 import { useOnboardingStore } from '@/lib/store/onboarding-store'
 import type { WeeklyAvailability, WeekDay } from '@/lib/types/onboarding'
 
-const DAYS: { key: WeekDay; label: string; short: string }[] = [
-  { key: 'monday', label: 'Monday', short: 'Mon' },
-  { key: 'tuesday', label: 'Tuesday', short: 'Tue' },
-  { key: 'wednesday', label: 'Wednesday', short: 'Wed' },
-  { key: 'thursday', label: 'Thursday', short: 'Thu' },
-  { key: 'friday', label: 'Friday', short: 'Fri' },
-  { key: 'saturday', label: 'Saturday', short: 'Sat' },
-  { key: 'sunday', label: 'Sunday', short: 'Sun' },
+const DAYS: { key: WeekDay; label: string }[] = [
+  { key: 'monday',    label: 'Monday' },
+  { key: 'tuesday',   label: 'Tuesday' },
+  { key: 'wednesday', label: 'Wednesday' },
+  { key: 'thursday',  label: 'Thursday' },
+  { key: 'friday',    label: 'Friday' },
+  { key: 'saturday',  label: 'Saturday' },
+  { key: 'sunday',    label: 'Sunday' },
 ]
 
 export function Step06Availability() {
@@ -28,57 +28,64 @@ export function Step06Availability() {
     nextStep()
   }
 
-  const anySelected = Object.values(selected).some(Boolean)
+  const count = Object.values(selected).filter(Boolean).length
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <p className="text-[#6B7280] text-sm font-medium uppercase tracking-wider">Step 6 of 12</p>
-        <h2 className="text-3xl font-bold text-[#111111] leading-tight">
-          When are you available?
-        </h2>
-        <p className="text-[#6B7280] text-sm">Pick all days you could potentially work.</p>
+        <p className="section-label" style={{ color: 'var(--et-blue)' }}>Step 6 of 11</p>
+        <h2 className="text-h1" style={{ color: 'var(--et-ink)' }}>When are you available?</h2>
+        <p style={{ fontSize: '14px', color: 'var(--et-muted)' }}>Pick all days you could potentially work.</p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {DAYS.map(({ key, label, short }, i) => (
-          <motion.button
-            key={key}
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.05 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => toggle(key)}
-            className={`h-14 rounded-2xl px-5 flex items-center justify-between transition-all ${
-              selected[key]
-                ? 'bg-[#3B82F6] text-white shadow-md shadow-blue-100'
-                : 'bg-white text-[#374151] border border-gray-100'
-            }`}
-          >
-            <span className="font-semibold">{label}</span>
-            {selected[key] && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"
-              >
-                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                  <path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </motion.div>
-            )}
-          </motion.button>
-        ))}
+      <div className="flex flex-col gap-2.5">
+        {DAYS.map(({ key, label }, i) => {
+          const on = selected[key]
+          return (
+            <motion.button
+              key={key}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04, ease: [0.22, 1, 0.36, 1] }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => toggle(key)}
+              style={{
+                height: 52, borderRadius: 'var(--radius-md)', padding: '0 20px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                border: on ? '1.5px solid rgba(37,99,235,0.3)' : '1.5px solid var(--et-border-mid)',
+                background: on ? 'var(--et-blue-light)' : 'var(--et-surface)',
+                cursor: 'pointer', transition: 'all 0.15s ease',
+              }}
+            >
+              <span style={{ fontSize: '15px', fontWeight: 600, color: on ? 'var(--et-blue)' : 'var(--et-ink)' }}>
+                {label}
+              </span>
+              <div style={{
+                width: 22, height: 22, borderRadius: 6,
+                border: on ? '2px solid var(--et-blue)' : '2px solid var(--et-border-mid)',
+                background: on ? 'var(--et-blue)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.12s ease',
+              }}>
+                {on && (
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+            </motion.button>
+          )
+        })}
       </div>
 
-      <motion.button
-        whileTap={{ scale: 0.97 }}
+      <button
         onClick={handleContinue}
-        disabled={!anySelected}
-        className="w-full h-14 bg-[#3B82F6] text-white rounded-2xl font-semibold text-base shadow-lg shadow-blue-200 disabled:opacity-40 disabled:shadow-none transition-all"
+        disabled={count === 0}
+        className="btn-primary w-full"
+        style={{ height: 52, borderRadius: 'var(--radius-lg)', fontSize: '15px', opacity: count > 0 ? 1 : 0.4 }}
       >
-        Continue
-      </motion.button>
+        {count > 0 ? `Continue (${count} day${count > 1 ? 's' : ''})` : 'Pick at least one day'}
+      </button>
     </div>
   )
 }

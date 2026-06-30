@@ -1,131 +1,201 @@
 'use client'
 
-import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
-import { useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { useState } from 'react'
 import type { JobMatch } from '@/lib/types/database'
-import { formatDistance, getMatchLabel, getHiringSpeedLabel } from '@/lib/utils/format'
 
 interface JobCardProps {
   job: JobMatch
   onSave?: (id: string) => void
-  onDismiss?: (id: string) => void
   isSaved?: boolean
+  index?: number
 }
 
-export function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProps) {
-  const { label: matchLabel, color: matchColor } = getMatchLabel(job.match_score)
-  const [swiped, setSwiped] = useState<'left' | 'right' | null>(null)
+function getMatchLabel(score: number): string {
+  if (score >= 93) return 'Perfect Match'
+  if (score >= 85) return 'Great Match'
+  if (score >= 75) return 'Good Match'
+  return 'Possible Match'
+}
+
+function MatchRing({ score }: { score: number }) {
+  const r = 28
+  const circ = 2 * Math.PI * r
+  const offset = circ - (score / 100) * circ
+
+  return (
+    <div className="relative flex-shrink-0" style={{ width: 72, height: 72 }}>
+      <svg width="72" height="72" viewBox="0 0 72 72" style={{ transform: 'rotate(-90deg)' }}>
+        <defs>
+          <linearGradient id={`mg${score}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop stopColor="#2563EB" />
+            <stop offset="1" stopColor="#7C3AED" />
+          </linearGradient>
+        </defs>
+        <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(37,99,235,0.10)" strokeWidth="6" />
+        <motion.circle
+          cx="36" cy="36" r={r}
+          fill="none"
+          stroke={`url(#mg${score})`}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          initial={{ strokeDashoffset: circ }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="match-gradient-text" style={{ fontSize: '17px', fontWeight: 800, lineHeight: 1 }}>
+          {score}%
+        </span>
+      </div>
+    </div>
+  )
+}
+
+export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    await onSave?.(job.id)
+    setSaving(false)
+  }
 
   function handleApply() {
     window.open(job.apply_url, '_blank', 'noopener,noreferrer')
   }
 
-  function handleSave() {
-    onSave?.(job.id)
-  }
+  const matchLabel = getMatchLabel(job.match_score)
+  const hiresfast = job.hiring_speed_score >= 80
+  const hasPay = job.salary_min || job.salary_max
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: swiped ? 0 : 1, x: swiped === 'right' ? 120 : swiped === 'left' ? -120 : 0 }}
-      className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 flex flex-col"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: index * 0.06 }}
+      className="card-elevated overflow-hidden flex flex-col"
     >
-      {/* Header */}
-      <div className="px-5 pt-5 pb-4 flex flex-col gap-3">
-        {/* Match + badges */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-blue-50 rounded-full px-3 py-1 flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-[#3B82F6]" />
-              <span className={`text-xs font-bold ${matchColor}`}>
-                {job.match_score}% match
-              </span>
-            </div>
-            {job.min_age <= 14 && (
-              <span className="bg-green-50 text-green-700 text-xs font-semibold px-2 py-1 rounded-full">
-                Ages 14+
-              </span>
-            )}
-            {job.min_age === 15 && (
-              <span className="bg-green-50 text-green-700 text-xs font-semibold px-2 py-1 rounded-full">
-                Ages 15+
+      {/* Top: Match ring + title */}
+      <div
+        className="px-5 pt-5 pb-4 flex items-start gap-4"
+        style={{ borderBottom: '1px solid var(--et-border)' }}
+      >
+        <MatchRing score={job.match_score} />
+
+        <div className="flex-1 min-w-0 pt-0.5">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span
+              className="match-gradient-text"
+              style={{ fontSize: '13px', fontWeight: 800, letterSpacing: '-0.01em' }}
+            >
+              {matchLabel}
+            </span>
+            {hiresfast && (
+              <span className="badge badge-amber" style={{ fontSize: '10px', padding: '2px 7px' }}>
+                ⚡ Hires Fast
               </span>
             )}
           </div>
-          {job.hiring_speed_score >= 80 && (
-            <span className="bg-orange-50 text-orange-600 text-xs font-semibold px-2 py-1 rounded-full">
-              ⚡ Hires Fast
+
+          <h3 style={{
+            fontSize: '18px',
+            fontWeight: 700,
+            color: 'var(--et-ink)',
+            letterSpacing: '-0.02em',
+            lineHeight: 1.2,
+          }}>
+            {job.title}
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--et-muted)', marginTop: '2px', fontWeight: 500 }}>
+            {job.company}
+          </p>
+        </div>
+      </div>
+
+      {/* Match reason */}
+      <div className="px-5 py-3.5" style={{ borderBottom: '1px solid var(--et-border)' }}>
+        <div className="flex items-start gap-2">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ marginTop: '2px', flexShrink: 0 }}>
+            <defs>
+              <linearGradient id="aiStarGrad" x1="0" y1="0" x2="14" y2="14" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#2563EB" />
+                <stop offset="1" stopColor="#7C3AED" />
+              </linearGradient>
+            </defs>
+            <path d="M7 1L8.5 5.5H13L9.5 8L11 12.5L7 10L3 12.5L4.5 8L1 5.5H5.5L7 1Z" fill="url(#aiStarGrad)" />
+          </svg>
+          <p style={{ fontSize: '13px', color: 'var(--et-subtle)', lineHeight: 1.5 }}>
+            {job.match_explanation}
+          </p>
+        </div>
+      </div>
+
+      {/* Logistics + actions */}
+      <div className="px-5 pt-3.5 pb-4 flex flex-col gap-3.5">
+        {/* Info badges */}
+        <div className="flex flex-wrap gap-2">
+          {job.distance_miles !== undefined && (
+            <span className="badge badge-subtle">
+              📍 {job.distance_miles < 1 ? 'Under 1 mi' : `${job.distance_miles.toFixed(1)} mi`}
             </span>
           )}
-        </div>
-
-        {/* Title + company */}
-        <div>
-          <h3 className="text-xl font-bold text-[#111111] leading-tight">{job.title}</h3>
-          <p className="text-[#6B7280] text-sm font-medium mt-0.5">{job.company}</p>
-        </div>
-
-        {/* Location + distance */}
-        <div className="flex items-center gap-1.5 text-sm text-[#6B7280]">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1C4.79 1 3 2.79 3 5C3 8.5 7 13 7 13C7 13 11 8.5 11 5C11 2.79 9.21 1 7 1ZM7 6.5C6.17 6.5 5.5 5.83 5.5 5C5.5 4.17 6.17 3.5 7 3.5C7.83 3.5 8.5 4.17 8.5 5C8.5 5.83 7.83 6.5 7 6.5Z" fill="#9CA3AF" />
-          </svg>
-          <span>{job.location}</span>
-          {job.distance_miles !== undefined && (
-            <span className="text-[#9CA3AF]">· {formatDistance(job.distance_miles)}</span>
+          <span className="badge badge-green">Ages {job.min_age}+</span>
+          {job.experience_required === 'none' && (
+            <span className="badge badge-blue">No experience needed</span>
+          )}
+          {hasPay ? (
+            <span className="badge badge-subtle">${job.salary_min ?? job.salary_max}/hr</span>
+          ) : (
+            <span className="badge badge-subtle">Competitive pay</span>
           )}
         </div>
 
-        {/* Match explanation */}
-        <p className="text-sm text-[#374151] bg-blue-50/60 rounded-xl px-3 py-2 leading-relaxed">
-          {job.match_explanation}
-        </p>
-      </div>
+        <p style={{ fontSize: '12px', color: 'var(--et-placeholder)' }}>{job.location}</p>
 
-      {/* Score bars */}
-      <div className="px-5 pb-4 grid grid-cols-3 gap-3">
-        {[
-          { label: 'Teen Friendly', score: job.teen_friendly_score },
-          { label: 'Flexibility', score: job.schedule_flexibility_score },
-          { label: 'Quick Hire', score: job.hiring_speed_score },
-        ].map(({ label, score }) => (
-          <div key={label} className="flex flex-col gap-1">
-            <div className="flex justify-between">
-              <span className="text-xs text-[#9CA3AF]">{label}</span>
-              <span className="text-xs font-semibold text-[#374151]">{score}</span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${score}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
-                className="h-full bg-[#3B82F6] rounded-full"
+        {/* Actions */}
+        <div className="flex gap-2.5">
+          <motion.button
+            whileTap={{ scale: 0.93 }}
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              height: '46px',
+              width: '52px',
+              borderRadius: 'var(--radius-md)',
+              border: isSaved ? '1.5px solid rgba(37,99,235,0.3)' : '1.5px solid var(--et-border-mid)',
+              background: isSaved ? 'var(--et-blue-light)' : 'var(--et-surface)',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path
+                d="M4 3H14C14.55 3 15 3.45 15 4V15.5L9 12.8L3 15.5V4C3 3.45 3.45 3 4 3Z"
+                fill={isSaved ? 'var(--et-blue)' : 'none'}
+                stroke={isSaved ? 'var(--et-blue)' : 'var(--et-muted)'}
+                strokeWidth="1.5"
+                strokeLinejoin="round"
               />
-            </div>
-          </div>
-        ))}
-      </div>
+            </svg>
+          </motion.button>
 
-      {/* Actions */}
-      <div className="px-5 pb-5 flex gap-3">
-        <button
-          onClick={handleSave}
-          className={`flex-1 h-12 rounded-2xl font-semibold text-sm transition-all border ${
-            isSaved
-              ? 'bg-blue-50 text-[#3B82F6] border-blue-100'
-              : 'bg-white text-[#374151] border-gray-200 hover:border-blue-200'
-          }`}
-        >
-          {isSaved ? '✓ Saved' : '🔖 Save'}
-        </button>
-        <motion.button
-          whileTap={{ scale: 0.96 }}
-          onClick={handleApply}
-          className="flex-2 flex-grow-[2] h-12 rounded-2xl font-semibold text-sm bg-[#3B82F6] text-white shadow-md shadow-blue-100"
-        >
-          Apply Now →
-        </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handleApply}
+            className="btn-primary flex-1"
+            style={{ height: '46px', borderRadius: 'var(--radius-md)', fontSize: '14px' }}
+          >
+            Apply Now →
+          </motion.button>
+        </div>
       </div>
     </motion.div>
   )

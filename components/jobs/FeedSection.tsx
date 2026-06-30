@@ -5,45 +5,47 @@ import { JobCard } from './JobCard'
 import type { JobMatch } from '@/lib/types/database'
 
 interface FeedSectionProps {
-  title: string
-  subtitle: string
   jobs: JobMatch[]
   savedJobs: string[]
   onSave: (id: string) => void
   emptyState?: string
 }
 
-export function FeedSection({ title, subtitle, jobs, savedJobs, onSave, emptyState }: FeedSectionProps) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-0.5">
-        <h2 className="text-lg font-bold text-[#111111]">{title}</h2>
-        <p className="text-sm text-[#6B7280]">{subtitle}</p>
-      </div>
-
-      {jobs.length === 0 ? (
-        <div className="bg-white rounded-3xl p-8 flex flex-col items-center gap-3 border border-gray-100">
-          <span className="text-4xl">🔍</span>
-          <p className="text-[#6B7280] text-sm text-center">{emptyState ?? 'Scanning for matches…'}</p>
+export function FeedSection({ jobs, savedJobs, onSave, emptyState }: FeedSectionProps) {
+  if (jobs.length === 0) {
+    return (
+      <div
+        className="card flex flex-col items-center gap-3 px-6 py-12"
+        style={{ textAlign: 'center' }}
+      >
+        <div
+          style={{
+            width: 48, height: 48, borderRadius: 'var(--radius-md)',
+            background: 'var(--et-blue-light)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '22px',
+          }}
+        >
+          🔍
         </div>
-      ) : (
-        <motion.div className="flex flex-col gap-4">
-          {jobs.map((job, i) => (
-            <motion.div
-              key={job.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <JobCard
-                job={job}
-                onSave={onSave}
-                isSaved={savedJobs.includes(job.id)}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
-      )}
+        <p style={{ fontSize: '14px', color: 'var(--et-muted)', lineHeight: 1.5 }}>
+          {emptyState ?? 'Scanning for matches in your area…'}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {jobs.map((job, i) => (
+        <JobCard
+          key={job.id}
+          job={job}
+          onSave={onSave}
+          isSaved={savedJobs.includes(job.id)}
+          index={i}
+        />
+      ))}
     </div>
   )
 }

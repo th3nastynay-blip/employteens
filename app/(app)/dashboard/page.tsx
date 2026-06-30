@@ -9,25 +9,25 @@ import type { JobMatch } from '@/lib/types/database'
 
 type FeedTab = 'best_matches' | 'new_near_you' | 'high_probability'
 
-const TABS: { key: FeedTab; label: string; emoji: string }[] = [
-  { key: 'best_matches', label: 'Best Matches', emoji: '🎯' },
-  { key: 'new_near_you', label: 'Near You', emoji: '📍' },
-  { key: 'high_probability', label: 'Quick Hire', emoji: '⚡' },
+const TABS: { key: FeedTab; label: string; count?: number }[] = [
+  { key: 'best_matches', label: 'Best Matches' },
+  { key: 'new_near_you', label: 'Near You' },
+  { key: 'high_probability', label: 'Quick Hire' },
 ]
 
-const AI_GREETING_STATES = [
+const SCAN_STATES = [
   'Scanning jobs in your area…',
-  'Matching jobs to your schedule…',
-  'AI feed ready',
+  'Matching to your schedule…',
+  'Ranking by fit…',
 ]
 
 export default function DashboardPage() {
-  const [userName, setUserName] = useState('there')
+  const [userName, setUserName] = useState('')
   const [activeTab, setActiveTab] = useState<FeedTab>('best_matches')
   const [savedJobs, setSavedJobs] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [aiState, setAiState] = useState(0)
-  const [jobs, setJobs] = useState<Record<FeedTab, JobMatch[]>>(FEED_SECTIONS as Record<FeedTab, JobMatch[]>)
+  const [scanIdx, setScanIdx] = useState(0)
+  const [jobs] = useState<Record<FeedTab, JobMatch[]>>(FEED_SECTIONS as Record<FeedTab, JobMatch[]>)
 
   useEffect(() => {
     async function loadDashboard() {
@@ -41,37 +41,26 @@ export default function DashboardPage() {
           .eq('id', user.id)
           .single()
 
-        if (profile?.name) setUserName(profile.name)
+        if (profile?.name) setUserName(profile.name.split(' ')[0])
 
-        // Load saved job IDs
         const { data: applications } = await supabase
           .from('applications')
           .select('job_id')
           .eq('user_id', user.id)
           .eq('status', 'saved')
 
-        if (applications) setSavedJobs(applications.map((a) => a.job_id))
-
-        // Try to load real job matches from DB
-        const { data: matchData } = await supabase
-          .rpc('get_user_feed', { p_user_id: user.id, p_section: activeTab, p_limit: 20 })
-
-        if (matchData && matchData.length > 0) {
-          // Real data available — map to JobMatch shape
-          // (for now fall through to mock)
-        }
+        if (applications) setSavedJobs(applications.map((a: { job_id: string }) => a.job_id))
       }
 
-      // Animate AI states
       let i = 0
       const interval = setInterval(() => {
         i++
-        setAiState(i)
-        if (i >= AI_GREETING_STATES.length - 1) {
+        setScanIdx(i)
+        if (i >= SCAN_STATES.length - 1) {
           clearInterval(interval)
-          setIsLoading(false)
+          setTimeout(() => setIsLoading(false), 600)
         }
-      }, 800)
+      }, 700)
     }
 
     loadDashboard()
@@ -84,126 +73,154 @@ export default function DashboardPage() {
 
     if (savedJobs.includes(jobId)) {
       setSavedJobs((prev) => prev.filter((id) => id !== jobId))
-      await supabase
-        .from('applications')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('job_id', jobId)
+      await supabase.from('applications').delete().eq('user_id', user.id).eq('job_id', jobId)
     } else {
       setSavedJobs((prev) => [...prev, jobId])
-      await supabase.from('applications').upsert({
-        user_id: user.id,
-        job_id: jobId,
-        status: 'saved',
-      })
+      await supabase.from('applications').upsert({ user_id: user.id, job_id: jobId, status: 'saved' })
     }
   }
 
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const timeLabel = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
+  const totalJobs = MOCK_JOBS.length
 
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Header */}
-      <div className="px-5 pt-12 pb-6 flex flex-col gap-1">
+    <div className="flex flex-col min-h-full">
+
+      {/* ── Header ── */}
+      <div className="px-5 pt-12 pb-5">
         <motion.p
-          initial={{ opacity: 0, y: -8 }}
+          initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-sm text-[#6B7280] font-medium"
+          style={{ fontSize: '14px', color: 'var(--et-muted)', fontWeight: 500 }}
         >
-          {greeting}, {userName} 👋
+          Good {timeLabel}{userName ? `, ${userName}` : ''} 👋
         </motion.p>
+
         <motion.h1
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-2xl font-bold text-[#111111]"
+          transition={{ delay: 0.07 }}
+          style={{
+            fontSize: '26px',
+            fontWeight: 800,
+            color: 'var(--et-ink)',
+            letterSpacing: '-0.03em',
+            marginTop: '3px',
+            lineHeight: 1.15,
+          }}
         >
-          Your job matches
+          {isLoading ? 'Finding your matches…' : `${totalJobs} jobs matched today`}
         </motion.h1>
 
-        {/* AI state indicator */}
-        <AnimatePresence mode="wait">
-          {isLoading ? (
-            <motion.p
-              key={aiState}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-xs text-[#3B82F6] font-medium loading-text mt-1"
-            >
-              {AI_GREETING_STATES[aiState]}
-            </motion.p>
-          ) : (
-            <motion.p
-              key="ready"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-xs text-[#9CA3AF] mt-1"
-            >
-              Updated today · {MOCK_JOBS.length} jobs scanned
-            </motion.p>
-          )}
-        </AnimatePresence>
+        {/* AI scan status */}
+        <div style={{ marginTop: '6px', height: '18px' }}>
+          <AnimatePresence mode="wait">
+            {isLoading ? (
+              <motion.div
+                key={scanIdx}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center gap-2"
+              >
+                <div className="flex gap-1">
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                </div>
+                <span style={{ fontSize: '12px', color: 'var(--et-blue)', fontWeight: 600 }}>
+                  {SCAN_STATES[scanIdx]}
+                </span>
+              </motion.div>
+            ) : (
+              <motion.p
+                key="ready"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                style={{ fontSize: '12px', color: 'var(--et-placeholder)' }}
+              >
+                AI feed · updated just now
+              </motion.p>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* Tab switcher */}
-      <div className="flex gap-2 px-5 overflow-x-auto scrollbar-hide pb-2">
-        {TABS.map(({ key, label, emoji }) => (
-          <motion.button
-            key={key}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setActiveTab(key)}
-            className={`flex-shrink-0 h-10 px-4 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === key
-                ? 'bg-[#3B82F6] text-white shadow-md shadow-blue-100'
-                : 'bg-white text-[#374151] border border-gray-200'
-            }`}
-          >
-            <span>{emoji}</span>
-            <span>{label}</span>
-          </motion.button>
-        ))}
+      {/* ── Tab bar ── */}
+      <div
+        className="flex gap-2 px-5 pb-4 scrollbar-hide overflow-x-auto"
+        style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+      >
+        {TABS.map(({ key, label }) => {
+          const active = activeTab === key
+          return (
+            <motion.button
+              key={key}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setActiveTab(key)}
+              style={{
+                flexShrink: 0,
+                height: '36px',
+                padding: '0 16px',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '13px',
+                fontWeight: active ? 700 : 500,
+                border: active ? 'none' : '1.5px solid var(--et-border-mid)',
+                background: active ? 'var(--et-blue)' : 'var(--et-surface)',
+                color: active ? '#fff' : 'var(--et-subtle)',
+                boxShadow: active ? 'var(--shadow-blue-sm)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              {label}
+            </motion.button>
+          )
+        })}
       </div>
 
-      {/* Feed */}
-      <div className="px-5 pt-4 pb-4">
+      {/* ── Feed ── */}
+      <div className="px-4 pb-4">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.25 }}
+            exit={{ opacity: 0, x: -10 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             {isLoading ? (
-              <div className="flex flex-col gap-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="bg-white rounded-3xl p-5 h-48 animate-pulse border border-gray-100">
-                    <div className="flex flex-col gap-3">
-                      <div className="h-4 bg-gray-100 rounded-full w-24" />
-                      <div className="h-6 bg-gray-100 rounded-full w-48" />
-                      <div className="h-4 bg-gray-100 rounded-full w-32" />
-                      <div className="h-12 bg-gray-50 rounded-xl" />
+              <div className="flex flex-col gap-3">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="card-elevated"
+                    style={{ height: 200, animationDelay: `${i * 0.1}s` }}
+                  >
+                    <div className="px-5 pt-5 pb-4 flex items-start gap-4" style={{ borderBottom: '1px solid var(--et-border)' }}>
+                      <div className="skeleton" style={{ width: 72, height: 72, borderRadius: '50%' }} />
+                      <div className="flex-1 flex flex-col gap-2 pt-1">
+                        <div className="skeleton" style={{ height: 12, width: '40%', borderRadius: 6 }} />
+                        <div className="skeleton" style={{ height: 18, width: '70%', borderRadius: 6 }} />
+                        <div className="skeleton" style={{ height: 12, width: '50%', borderRadius: 6 }} />
+                      </div>
+                    </div>
+                    <div className="px-5 pt-4 flex flex-col gap-2">
+                      <div className="skeleton" style={{ height: 12, width: '80%', borderRadius: 6 }} />
+                      <div className="skeleton" style={{ height: 12, width: '60%', borderRadius: 6 }} />
                     </div>
                   </div>
                 ))}
-                <p className="text-center text-sm text-[#9CA3AF] loading-text">
-                  Matching jobs to your profile…
-                </p>
               </div>
             ) : (
               <FeedSection
-                title={TABS.find((t) => t.key === activeTab)?.label ?? ''}
-                subtitle={
-                  activeTab === 'best_matches' ? 'AI-ranked by how well they fit you' :
-                  activeTab === 'new_near_you' ? 'Jobs within easy reach from your ZIP' :
-                  'Employers known to hire teens fast'
-                }
                 jobs={jobs[activeTab]}
                 savedJobs={savedJobs}
                 onSave={handleSave}
-                emptyState="New matches loading… check back tomorrow."
+                emptyState="No matches in this category yet — check back tomorrow."
               />
             )}
           </motion.div>

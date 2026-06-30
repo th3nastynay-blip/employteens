@@ -166,17 +166,21 @@ export default function ProfilePage() {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setLoading(false); return }
 
-      const [{ data: profileData }, { count: saved }, { count: applied }] = await Promise.all([
-        supabase.from('users').select('*').eq('id', user.id).single(),
-        supabase.from('applications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'saved'),
-        supabase.from('applications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'applied'),
-      ])
+      try {
+        const [{ data: profileData }, { count: saved }, { count: applied }] = await Promise.all([
+          supabase.from('users').select('*').eq('id', user.id).single(),
+          supabase.from('applications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'saved'),
+          supabase.from('applications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'applied'),
+        ])
 
-      if (profileData) setProfile(profileData as unknown as UserProfile)
-      setSavedCount(saved ?? 0)
-      setAppCount(applied ?? 0)
+        if (profileData) setProfile(profileData as unknown as UserProfile)
+        setSavedCount(saved ?? 0)
+        setAppCount(applied ?? 0)
+      } catch {
+        // silently fail — show empty state
+      }
       setLoading(false)
     }
     load()
@@ -198,7 +202,41 @@ export default function ProfilePage() {
     )
   }
 
-  if (!profile) return null
+  if (!profile) {
+    return (
+      <div className="px-5 pt-12 flex flex-col items-center gap-5" style={{ paddingTop: 80 }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 'var(--radius-lg)',
+          background: 'linear-gradient(135deg, #EFF6FF, #F5F3FF)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
+        }}>
+          👤
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--et-ink)', letterSpacing: '-0.02em' }}>
+            Profile not set up yet
+          </h2>
+          <p style={{ fontSize: '14px', color: 'var(--et-muted)', marginTop: 6, lineHeight: 1.5 }}>
+            Complete onboarding to build your profile and get AI job matches.
+          </p>
+        </div>
+        <a href="/onboarding">
+          <button className="btn-primary" style={{ borderRadius: 'var(--radius-full)' }}>
+            Complete onboarding →
+          </button>
+        </a>
+        <button
+          onClick={handleSignOut}
+          style={{
+            background: 'none', border: 'none', fontSize: '14px',
+            color: 'var(--et-muted)', cursor: 'pointer', fontWeight: 500,
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+    )
+  }
 
   const skills = (profile.skills ?? []) as string[]
   const interests = (profile.interests ?? []) as string[]

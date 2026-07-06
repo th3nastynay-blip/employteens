@@ -1,6 +1,8 @@
 /**
  * EMPLOYTEENS — AI Coach System
- * Unified conversational AI with full user context
+ * Provider: Google Gemini 2.0 Flash (free tier, no credit card required)
+ * Get a key: https://aistudio.google.com → Get API key
+ * Env var: GEMINI_API_KEY
  */
 
 import type { UserProfile } from '@/lib/types/database'
@@ -10,7 +12,27 @@ export interface ChatMessage {
   content: string
 }
 
-function buildSystemPrompt(userProfile?: UserProfile): string {
+export interface JobContext {
+  topMatches: {
+    title: string
+    company: string
+    location: string
+    match_score: number
+    match_explanation: string
+    apply_url: string
+    min_age: number
+    pay: string | null
+    hires_fast: boolean
+    no_experience: boolean
+  }[]
+  recentApplications: {
+    title: string | undefined
+    company: string | undefined
+    status: string
+  }[]
+}
+
+function buildSystemPrompt(userProfile?: UserProfile, jobContext?: JobContext): string {
   const profile = userProfile
     ? `
 ## User Profile
@@ -55,62 +77,74 @@ ${profile}
 - Hours limits: 14-15 year olds can work max 3 hrs/day on school days, 8 hrs on non-school days
 - Best companies that hire at 14-15: AMC Theatres, McDonald's, some grocery stores, Chick-fil-A
 
-Always be accurate about these rules — incorrect labor law info could harm the user.`
+Always be accurate about these rules — incorrect labor law info could harm the user.
+
+## CRITICAL RULES
+- NEVER invent job listings. Only recommend jobs from the "Current Job Matches" section below.
+- If asked "what jobs should I apply for?" or similar, reference ONLY the jobs listed below.
+- If no jobs are listed or none match, say so honestly and give general strategy advice instead.
+- When recommending a specific job, always include the company name, location, and match score.
+${jobContext && jobContext.topMatches.length > 0 ? `
+## Top Job Matches (use ONLY these when recommending jobs — do not invent others)
+${jobContext.topMatches.slice(0, 8).map((j, i) =>
+  `${i + 1}. ${j.title} @ ${j.company}, ${j.location} — ${j.match_score}% match. ${j.pay ?? 'Pay TBD'}. Age ${j.min_age}+. ${j.no_experience ? 'No exp needed.' : ''} ${j.hires_fast ? 'Hires fast.' : ''}`
+).join('\n')}` : '\n## Job Matches: None yet — give general advice.\n'}
+${jobContext && jobContext.recentApplications.length > 0 ? `
+## User's Application History
+${jobContext.recentApplications.map((a) => `- ${a.title} at ${a.company}: ${a.status}`).join('\n')}
+` : ''}`
 }
 
 export async function getStreamingChatResponse(
   messages: ChatMessage[],
   userProfile?: UserProfile,
+  jobContext?: JobContext,
 ): Promise<Response> {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = process.env.GROQ_API_KEY
 
   if (!apiKey) {
-    // Fallback: simulate a helpful response as a stream
-    const fallback = getFallbackResponse(messages[messages.length - 1]?.content ?? '')
-    const encoder = new TextEncoder()
-    const stream = new ReadableStream({
-      async start(controller) {
-        // Stream word by word for a natural feel
-        const words = fallback.split(' ')
-        for (const word of words) {
-          const chunk = `data: ${JSON.stringify({ choices: [{ delta: { content: word + ' ' } }] })}\n\n`
-          controller.enqueue(encoder.encode(chunk))
-          await new Promise((r) => setTimeout(r, 28))
-        }
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-        controller.close()
+    return getFallbackStream(messages[messages.length - 1]?.content ?? '')
+  }
+
+  const systemPrompt = buildSystemPrompt(userProfile, jobContext)
+
+  // Groq is OpenAI-compatible — no translation layer needed
+  // llama-3.3-70b-versatile: free, fast, great quality
+  let groqRes: globalThis.Response
+  try {
+    groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
       },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages,
+        ],
+        max_tokens: 1000,
+        temperature: 0.72,
+        stream: true,
+      }),
     })
-    return new Response(stream, {
-      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-    })
+  } catch (fetchErr) {
+    console.error('[Groq] fetch error', fetchErr)
+    return getFallbackStream(messages[messages.length - 1]?.content ?? '')
   }
 
-  const systemPrompt = buildSystemPrompt(userProfile)
-
-  const openAIRes = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages,
-      ],
-      max_tokens: 1000,
-      temperature: 0.72,
-      stream: true,
-    }),
-  })
-
-  if (!openAIRes.ok) {
-    throw new Error(`OpenAI error: ${openAIRes.status}`)
+  if (!groqRes.ok) {
+    const errText = await groqRes.text()
+    console.error('[Groq] HTTP error', groqRes.status, errText)
+    if (groqRes.status === 429) {
+      return getFallbackStream(messages[messages.length - 1]?.content ?? '')
+    }
+    return streamError(`AI error (${groqRes.status}): ${errText.slice(0, 150)}`)
   }
 
-  return new Response(openAIRes.body, {
+  // Groq returns standard OpenAI SSE — pass it straight through
+  return new Response(groqRes.body, {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -119,24 +153,59 @@ export async function getStreamingChatResponse(
   })
 }
 
+// Stream a plain error message as if it were an AI response
+function streamError(message: string): Response {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    start(controller) {
+      const chunk = `data: ${JSON.stringify({ choices: [{ delta: { content: message } }] })}\n\n`
+      controller.enqueue(encoder.encode(chunk))
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+      controller.close()
+    },
+  })
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  })
+}
+
+function getFallbackStream(message: string): Response {
+  const text = getFallbackResponse(message)
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      for (const word of text.split(' ')) {
+        const chunk = `data: ${JSON.stringify({ choices: [{ delta: { content: word + ' ' } }] })}\n\n`
+        controller.enqueue(encoder.encode(chunk))
+        await new Promise((r) => setTimeout(r, 28))
+      }
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+      controller.close()
+    },
+  })
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  })
+}
+
 function getFallbackResponse(message: string): string {
   const lower = message.toLowerCase()
 
   if (lower.includes('resume')) {
-    return `Here's a clean resume template for you:\n\n**YOUR NAME**\nPhone: (XXX) XXX-XXXX | Email: you@email.com | City, State\n\n**OBJECTIVE**\nEnergetic high school student seeking part-time work to build customer service and teamwork experience.\n\n**EDUCATION**\n[School Name], [City, State] — Expected graduation: [Year]\n\n**SKILLS**\n- Communication and customer service\n- Reliable and punctual\n- Teamwork\n- [Add any: cash handling, social media, cooking, etc.]\n\n**ACTIVITIES**\n- [School clubs, sports, volunteer work]\n- [Any informal work: babysitting, lawn care, tutoring]\n\n**REFERENCES** Available upon request\n\nPro tip: Print 2 copies and bring them when you apply in person.`
+    return `Here's a clean resume template:\n\n**YOUR NAME**\nPhone: (XXX) XXX-XXXX | Email: you@email.com | City, State\n\n**OBJECTIVE**\nEnergetic high school student seeking part-time work to build customer service and teamwork experience.\n\n**EDUCATION**\n[School Name], [City, State] — Expected graduation: [Year]\n\n**SKILLS**\n- Communication and customer service\n- Reliable and punctual\n- [Add any: cash handling, social media, cooking, etc.]\n\n**ACTIVITIES**\n- [School clubs, sports, volunteer work]\n- [Any informal work: babysitting, lawn care, tutoring]\n\nPro tip: Print 2 copies and bring them when you apply in person.`
   }
 
   if (lower.includes('interview')) {
-    return `Here are the 5 most common questions you'll face:\n\n1. **"Tell me about yourself."** → Name, grade, why you want this job. Keep it to 3 sentences.\n\n2. **"Why do you want to work here?"** → Be specific. "I shop here a lot" actually works.\n\n3. **"What's your availability?"** → Be honest about school. Say you're flexible on weekends.\n\n4. **"Do you have experience?"** → No job yet? Mention school clubs, babysitting, or chores. Everything counts.\n\n5. **"How do you handle a difficult customer?"** → Stay calm, listen, get a manager if needed.\n\nWhat company are you interviewing at? I can give you more specific tips.`
+    return `The 5 questions you'll almost always get:\n\n1. **"Tell me about yourself."** → Name, grade, why you want this job. 3 sentences max.\n2. **"Why do you want to work here?"** → Be specific. "I shop here a lot" actually works.\n3. **"What's your availability?"** → Be honest about school. Flexible on weekends is a plus.\n4. **"Do you have experience?"** → No job yet? Mention clubs, babysitting, or chores.\n5. **"How do you handle a difficult customer?"** → Stay calm, listen, get a manager if needed.\n\nWhat company are you interviewing at? I can give specific tips.`
   }
 
-  if (lower.includes('reject') || lower.includes('didn\'t get') || lower.includes('ghosted')) {
-    return `That's frustrating, but it's completely normal — most people get rejected multiple times before landing their first job.\n\nHere's what to do:\n\n1. **Apply somewhere else immediately.** Don't wait. Cast a wide net.\n2. **Follow up once** — a short email or call 5 days after applying shows initiative.\n3. **Apply in person** at your next target. Walking in beats an online application at most food/retail jobs.\n4. **Ask for feedback** if you made it to an interview — some managers will actually tell you.\n\nWhich company rejected you? I can help you figure out what likely happened and how to improve.`
+  if (lower.includes('reject') || lower.includes('ghosted')) {
+    return `Normal — most people get rejected multiple times before their first job.\n\n1. **Apply somewhere else immediately.** Don't wait.\n2. **Follow up once** — a short call 5 days after applying shows initiative.\n3. **Apply in person** at your next target. Walking in beats online at most food/retail jobs.\n\nWhich company was it? I can help figure out what happened.`
   }
 
-  if (lower.includes('permit') || lower.includes('work permit') || lower.includes('certificate')) {
-    return `You'll need a **Working Papers** (Employment Certificate) before you can work if you're under 18.\n\n**How to get it:**\n1. Get a job offer first (most employers will wait)\n2. Go to your school's main office and ask for working papers\n3. Bring: your birth certificate + a signed letter from your employer\n4. School issues the certificate — usually same day\n\nIf school is out, go to your district's main administrative office.\n\n**NY teens:** Your employer keeps the certificate on file.\n**NJ teens:** Same process, issued by school.\n\nAnything else you need to know?`
+  if (lower.includes('permit') || lower.includes('work permit')) {
+    return `You need **Working Papers** before you can legally work if you're under 18.\n\n1. Get a job offer first (employers will wait)\n2. Go to your school's main office\n3. Bring: birth certificate + signed letter from employer\n4. School issues the certificate — usually same day\n\nAnything else?`
   }
 
-  return `I can help you with resumes, interview prep, application strategy, and anything else about getting your first job in NY or NJ.\n\nWhat's on your mind? Tell me what job you're going for and I'll give you specific advice.`
+  return `I can help with resumes, interview prep, application strategy, and anything about getting a job in NY or NJ.\n\nWhat job are you going for? Give me specifics and I'll give you a real plan.`
 }

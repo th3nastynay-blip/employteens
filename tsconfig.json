@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@supabase/supabase-js/dist/module/lib/types": ["./lib/types/supabase-ssr-compat.ts"]
     }
   },
   "include": [

@@ -8,6 +8,10 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { computeMatchScore } from '@/lib/ai/match-engine'
 import type { UserProfile, JobRow } from '@/lib/types/database'
 
+// Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
+// This loops every onboarded user against every active job.
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   // Verify cron secret
   const auth = req.headers.get('Authorization')
@@ -17,13 +21,15 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createAdminClient()
 
-  // Fetch all active jobs
+  // Fetch only verified active jobs — no unverified URLs in the feed
   const { data: jobs, error: jobsError } = await supabase
     .from('jobs')
     .select('*')
     .eq('status', 'active')
+    .eq('is_active', true)
+    .eq('verification_status', 'verified')
     .lt('scam_risk_score', 70)
-    .order('created_at', { ascending: false })
+    .order('verified_at', { ascending: false })
     .limit(500)
 
   if (jobsError || !jobs) {

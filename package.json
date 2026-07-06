@@ -6,12 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "workers:ingest": "tsx workers/ingest-apis.ts",
-    "workers:scrape": "tsx workers/scrape-employers.ts",
-    "workers:enrich": "tsx workers/job-enricher.ts",
-    "workers:clean": "tsx workers/job-cleaner.ts",
-    "workers:dedup": "tsx workers/deduplication-engine.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import type { JobMatch } from '@/lib/types/database'
 
 interface JobCardProps {
@@ -76,8 +77,35 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
     setSaving(false)
   }
 
-  function handleApply() {
+  async function handleApply() {
+    // Open the official application URL
     window.open(job.apply_url, '_blank', 'noopener,noreferrer')
+
+    // Record the application attempt in the database
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Upsert: if already saved/applied, don't downgrade the status
+      const { data: existing } = await supabase
+        .from('applications')
+        .select('status')
+        .eq('user_id', user.id)
+        .eq('job_id', job.id)
+        .single()
+
+      // Only write if no record exists or status is just 'saved'
+      if (!existing || existing.status === 'saved') {
+        await supabase.from('applications').upsert({
+          user_id: user.id,
+          job_id: job.id,
+          status: 'applied',
+        })
+      }
+    } catch {
+      // Non-critical — don't block the apply action
+    }
   }
 
   const matchLabel = getMatchLabel(job.match_score)

@@ -13,6 +13,9 @@ export function Step12Done() {
 
   function handleGoToDashboard() {
     reset()
+    // refresh() forces server components to re-read the session cookie
+    // so middleware sees the authenticated user and doesn't redirect to /login
+    router.refresh()
     router.push('/dashboard')
   }
 

@@ -60,20 +60,33 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 5. Seed Initial Jobs
+## 5. Populate Jobs (Production Ingestion Pipeline)
 
-Run any worker to populate the DB with jobs:
+There is exactly one job pipeline — the API routes under `/api/ingest/*` — and it
+is the only thing allowed to write rows into `jobs`. Every row it writes has
+already passed URL verification (`lib/jobs/verify-url.ts`) before insert. There
+is no seed/mock data path anymore; if these haven't been run yet, the jobs table
+starts empty and stays empty until real listings come in and pass verification.
 
 ```bash
-# Scrape enterprise employers (Chipotle, Starbucks, McDonald's, etc.)
-npm run workers:scrape
+# Greenhouse + Lever + Ashby + SmartRecruiters — no API keys needed
+curl -X POST http://localhost:3000/api/ingest/ats \
+  -H "Authorization: Bearer your-cron-secret"
 
-# Generate local business listings
-npx tsx workers/scrape-local-business.ts
+# Adzuna — needs ADZUNA_APP_ID / ADZUNA_APP_KEY
+curl -X POST http://localhost:3000/api/ingest/adzuna \
+  -H "Authorization: Bearer your-cron-secret"
 
-# Pull from APIs (needs API keys)
-npm run workers:ingest
+# JSearch — needs JSEARCH_API_KEY
+curl -X POST http://localhost:3000/api/ingest/jsearch \
+  -H "Authorization: Bearer your-cron-secret"
 ```
+
+In production these run automatically on the schedule in `vercel.json`
+(twice daily for Adzuna/ATS, once daily for JSearch given its tighter quota).
+`/api/cron/clean-jobs` re-verifies existing listings and deactivates dead ones
+every 12 hours. `/api/admin/stats` reports cumulative imported/verified/rejected/
+expired/removed counts.
 
 ---
 
@@ -88,21 +101,13 @@ curl -X POST http://localhost:3000/api/generate-feed \
 
 ---
 
-## 7. Deploy Edge Functions (Supabase)
+## 7. Note on Supabase Edge Functions
 
-```bash
-# Install Supabase CLI
-npm install -g supabase
-
-# Deploy cleanup cron (runs every 12 hours)
-supabase functions deploy cron-clean-jobs
-supabase functions schedule add cron-clean-jobs --cron "0 */12 * * *"
-
-# Deploy feed generation cron (runs 6am daily)
-supabase functions deploy cron-generate-feed
-supabase functions schedule add cron-generate-feed --cron "0 11 * * *"
-# (6am EST = 11am UTC)
-```
+`supabase/edge-functions/cron-clean-jobs` is a legacy Deno function from an
+earlier iteration. It's superseded by `/api/cron/clean-jobs` (scheduled via
+`vercel.json`, which is what actually runs in production) and should not be
+deployed/scheduled — doing so would run a second, weaker cleanup pass in
+parallel that doesn't know about the verification metadata columns.
 
 ---
 
@@ -127,17 +132,18 @@ User → Signup → 13-step Onboarding → Dashboard
                                         ↓
                               Job Cards (swipe to save, tap to apply)
 
-Workers (Node.js):
-  ingest-apis.ts      → Adzuna, JSearch, USAJobs, Greenhouse, Lever
-  scrape-employers.ts → Chipotle, Starbucks, McDonald's, AMC, etc.
-  scrape-local.ts     → NY/NJ cafes, gyms, restaurants
-  job-enricher.ts     → AI scores all jobs (teen-friendly, scam risk, etc.)
-  job-cleaner.ts      → Removes dead/expired jobs every 12h
-  dedup-engine.ts     → Prevents duplicate job entries
+Ingestion (Next.js API routes, scheduled via vercel.json):
+  /api/ingest/adzuna   → Adzuna search API (major chains) — needs ADZUNA_APP_ID/KEY
+  /api/ingest/ats      → Greenhouse + Lever + Ashby + SmartRecruiters — no keys needed
+  /api/ingest/jsearch  → JSearch/RapidAPI (Indeed/ZipRecruiter/LinkedIn aggregate) — needs JSEARCH_API_KEY
+  /api/cron/clean-jobs → Re-verifies existing listings, deactivates dead/expired ones, every 12h
+  /api/admin/purge-jobs → One-time/manual: hard-deletes generic-URL or curated-source rows
+  /api/admin/stats     → Cumulative imported/verified/rejected/expired/removed report
+  /api/admin/qa-report → Samples active jobs, re-verifies, auto-deactivates failures
 
-Edge Functions (Supabase):
-  cron-clean-jobs     → Runs every 12 hours
-  cron-generate-feed  → Runs at 6am daily
+All scoring/verification logic (teen-friendliness, scam risk, URL verification,
+normalization) lives in lib/jobs/*.ts and is shared across every ingestion route —
+there is exactly one code path that can write into the jobs table.
 ```
 
 ---

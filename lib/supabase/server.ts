@@ -1,8 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
+import type { CookieOptions } from '@supabase/ssr'
+import { SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import type { Database } from '@/lib/types/database'
 
-export async function createClient() {
+type CookieEntry = { name: string; value: string; options: CookieOptions }
+
+// Same @supabase/ssr v0.5.2 / @supabase/supabase-js v2.108+ generic mismatch as client.ts.
+// Explicit SupabaseClient<Database> return type restores correct type inference.
+export async function createClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies()
 
   return createServerClient<Database>(
@@ -13,7 +19,7 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieEntry[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
@@ -22,10 +28,10 @@ export async function createClient() {
         },
       },
     }
-  )
+  ) as unknown as SupabaseClient<Database>
 }
 
-export async function createAdminClient() {
+export async function createAdminClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies()
 
   return createServerClient<Database>(
@@ -36,7 +42,7 @@ export async function createAdminClient() {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieEntry[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
@@ -45,5 +51,5 @@ export async function createAdminClient() {
         },
       },
     }
-  )
+  ) as unknown as SupabaseClient<Database>
 }

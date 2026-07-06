@@ -1,3 +1,5 @@
+import type { VerificationStatus } from '@/lib/jobs/verify-url'
+
 export type Json =
   | string
   | number
@@ -13,31 +15,37 @@ export interface Database {
         Row: UserRow
         Insert: Omit<UserRow, 'created_at' | 'updated_at'>
         Update: Partial<Omit<UserRow, 'id' | 'created_at'>>
+        Relationships: []
       }
       jobs: {
         Row: JobRow
         Insert: Omit<JobRow, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<JobRow, 'id' | 'created_at'>>
+        Relationships: []
       }
       applications: {
         Row: ApplicationRow
         Insert: Omit<ApplicationRow, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<ApplicationRow, 'id' | 'created_at'>>
+        Relationships: []
       }
       job_matches: {
         Row: JobMatchRow
         Insert: Omit<JobMatchRow, 'id'>
         Update: Partial<Omit<JobMatchRow, 'id'>>
+        Relationships: []
       }
       ingestion_logs: {
         Row: IngestionLogRow
         Insert: Omit<IngestionLogRow, 'id'>
         Update: Partial<Omit<IngestionLogRow, 'id'>>
+        Relationships: []
       }
       analytics_events: {
         Row: AnalyticsEventRow
         Insert: Omit<AnalyticsEventRow, 'id' | 'created_at'>
         Update: Partial<Omit<AnalyticsEventRow, 'id'>>
+        Relationships: []
       }
     }
     Views: Record<string, never>
@@ -62,7 +70,12 @@ export interface Database {
   }
 }
 
+// Row interfaces: [key: string]: unknown is required so that TypeScript's structural
+// typing considers these compatible with Record<string, unknown> (needed by
+// postgrest-js v2+ GenericTable constraint). Every named property must be assignable
+// to unknown — which is vacuously true since unknown is the top type.
 export interface UserRow {
+  [key: string]: unknown
   id: string
   name: string
   age: number
@@ -81,6 +94,7 @@ export interface UserRow {
 }
 
 export interface JobRow {
+  [key: string]: unknown
   id: string
   title: string
   company: string
@@ -105,6 +119,12 @@ export interface JobRow {
   job_type?: string | null
   status: 'active' | 'inactive' | 'pending' | 'flagged'
   last_verified_at: string | null
+  // Verification metadata — added by supabase/migrations/add_verification_fields.sql
+  verified_at: string | null
+  last_checked_at: string | null
+  http_status: number | null
+  is_active: boolean
+  verification_status: VerificationStatus | 'expired'
   posted_at?: string | null
   embedding: number[] | null
   created_at: string
@@ -112,6 +132,7 @@ export interface JobRow {
 }
 
 export interface ApplicationRow {
+  [key: string]: unknown
   id: string
   user_id: string
   job_id: string
@@ -122,6 +143,7 @@ export interface ApplicationRow {
 }
 
 export interface JobMatchRow {
+  [key: string]: unknown
   id: string
   user_id: string
   job_id: string
@@ -132,6 +154,7 @@ export interface JobMatchRow {
 }
 
 export interface IngestionLogRow {
+  [key: string]: unknown
   id: string
   source: string
   jobs_fetched: number
@@ -141,9 +164,15 @@ export interface IngestionLogRow {
   error_message?: string | null
   started_at: string
   completed_at?: string | null
+  // Added by supabase/migrations/add_ingestion_log_details.sql — holds the full
+  // per-run IngestStats breakdown (see lib/jobs/ingest-pipeline.ts) so Phase 6
+  // reporting can sum granular counts (verified/rejected_mismatch/etc) historically,
+  // not just the four aggregate columns above.
+  details?: Json | null
 }
 
 export interface AnalyticsEventRow {
+  [key: string]: unknown
   id: string
   user_id: string | null
   event_type: string
@@ -152,7 +181,7 @@ export interface AnalyticsEventRow {
   created_at: string
 }
 
-// App-level types
+// App-level types (no index signature needed — not used as Supabase Row types)
 export interface UserProfile {
   id: string
   name: string

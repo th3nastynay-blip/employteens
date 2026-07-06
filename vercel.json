@@ -1,0 +1,24 @@
+{
+  "crons": [
+    {
+      "path": "/api/ingest/ats",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/ingest/adzuna",
+      "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/ingest/jsearch",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/clean-jobs",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/generate-feed",
+      "schedule": "0 10 * * *"
+    }
+  ]
+}

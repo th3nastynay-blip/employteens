@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useOnboardingStore } from '@/lib/store/onboarding-store'
 import { createClient } from '@/lib/supabase/client'
@@ -16,11 +16,23 @@ const AI_STEPS = [
   { text: 'Your feed is ready!', duration: 700 },
 ]
 
+const TOTAL_ANIM_MS = AI_STEPS.reduce((sum, s) => sum + s.duration, 0)
+
 export function Step11Processing() {
   const store = useOnboardingStore()
   const [currentStep, setCurrentStep] = useState(0)
-  const [done, setDone] = useState(false)
+  const [animDone, setAnimDone] = useState(false)
+  const [saveDone, setSaveDone] = useState(false)
   const [saveError, setSaveError] = useState(false)
+  const advanced = useRef(false)
+
+  // Advance only when BOTH animation finished AND save succeeded
+  useEffect(() => {
+    if (animDone && saveDone && !advanced.current) {
+      advanced.current = true
+      store.nextStep()
+    }
+  }, [animDone, saveDone])
 
   useEffect(() => {
     let elapsed = 0
@@ -30,7 +42,7 @@ export function Step11Processing() {
       const t = setTimeout(() => {
         setCurrentStep(i)
         if (i === AI_STEPS.length - 1) {
-          setTimeout(() => setDone(true), step.duration)
+          setTimeout(() => setAnimDone(true), step.duration)
         }
       }, elapsed)
       timers.push(t)
@@ -45,7 +57,10 @@ export function Step11Processing() {
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        setSaveError(true)
+        return
+      }
 
       // Upload resume if file present
       let resume_url = store.resume_url
@@ -62,12 +77,8 @@ export function Step11Processing() {
         }
       }
 
-      // Serialize multi-select fields to JSON strings (no DB migration needed)
       const transportationSerialized = serializeTransportation(store.transportation)
       const interestsSerialized = serializeInterests(store.interests)
-      // Skills and languages stay as plain string arrays (JSONB in DB)
-      const skillNames = store.skills
-      const languageNames = store.languages
 
       const { error } = await supabase.from('users').upsert({
         id: user.id,
@@ -79,8 +90,8 @@ export function Step11Processing() {
         school_grade: store.school_grade,
         school_end_time: store.school_end_time,
         availability: store.availability,
-        skills: skillNames,
-        interests: interestsSerialized,   // JSON string of WeightedInterest[]
+        skills: store.skills,
+        interests: interestsSerialized,
         resume_url,
         onboarding_completed: true,
       })
@@ -88,16 +99,36 @@ export function Step11Processing() {
       if (error) {
         console.error('[Profile save]', error)
         setSaveError(true)
+        return
       }
+
+      // Fire-and-forget: kick off match generation for this user
+      // Don't await — dashboard will fall back to on-the-fly matching if needed
+      fetch('/api/match-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id }),
+      }).catch(() => {/* non-critical */})
+
+      setSaveDone(true)
     } catch (err) {
       console.error('[Profile save exception]', err)
       setSaveError(true)
     }
   }
 
+  // If save errored but animation finished, still advance after a short wait
   useEffect(() => {
-    if (done) store.nextStep()
-  }, [done])
+    if (saveError && animDone && !advanced.current) {
+      const t = setTimeout(() => {
+        if (!advanced.current) {
+          advanced.current = true
+          store.nextStep()
+        }
+      }, 2000)
+      return () => clearTimeout(t)
+    }
+  }, [saveError, animDone])
 
   const progress = ((currentStep + 1) / AI_STEPS.length) * 100
   const r = 38
@@ -105,7 +136,6 @@ export function Step11Processing() {
 
   return (
     <div className="w-full max-w-sm flex flex-col items-center gap-10">
-      {/* Animated logo mark */}
       <motion.div
         animate={{ scale: [1, 1.06, 1] }}
         transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
@@ -122,7 +152,6 @@ export function Step11Processing() {
         </svg>
       </motion.div>
 
-      {/* Progress ring */}
       <div className="relative" style={{ width: 96, height: 96 }}>
         <svg width="96" height="96" viewBox="0 0 96 96" style={{ transform: 'rotate(-90deg)' }}>
           <defs>
@@ -150,7 +179,6 @@ export function Step11Processing() {
         </div>
       </div>
 
-      {/* Status text */}
       <AnimatePresence mode="wait">
         <motion.p
           key={currentStep}
@@ -165,7 +193,7 @@ export function Step11Processing() {
       </AnimatePresence>
 
       <p style={{ fontSize: '13px', color: 'var(--et-placeholder)', textAlign: 'center' }}>
-        {saveError ? 'Saving profile… one moment.' : 'This only takes a few seconds…'}
+        {saveError ? 'Having trouble saving — retrying…' : 'This only takes a few seconds…'}
       </p>
     </div>
   )

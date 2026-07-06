@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { JobCard } from '@/components/jobs/JobCard'
-import { MOCK_JOBS } from '@/lib/data/mock-jobs'
-import type { JobMatch } from '@/lib/types/database'
+import type { JobMatch, JobRow } from '@/lib/types/database'
 
 export default function SavedJobsPage() {
   const [savedJobs, setSavedJobs] = useState<JobMatch[]>([])
@@ -16,20 +15,29 @@ export default function SavedJobsPage() {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setLoading(false); return }
 
+      // Fetch saved applications with the joined job data
       const { data } = await supabase
         .from('applications')
-        .select('job_id')
+        .select('job_id, jobs (*)')
         .eq('user_id', user.id)
         .eq('status', 'saved')
+        .order('created_at', { ascending: false })
 
-      const ids = data?.map((a) => a.job_id) ?? []
+      type RawApp = { job_id: string; jobs: unknown }
+      const rows = (data ?? []) as unknown as RawApp[]
+      const ids = rows.map((a) => a.job_id)
       setSavedIds(ids)
 
-      // Filter mock jobs by saved IDs (prod: fetch from jobs table)
-      const saved = MOCK_JOBS.filter((j) => ids.includes(j.id))
-      setSavedJobs(saved)
+      const jobs: JobMatch[] = rows
+        .filter((a) => a.jobs && typeof a.jobs === 'object')
+        .map((a) => ({
+          ...(a.jobs as JobRow),
+          match_score: 0,
+          match_explanation: '',
+        }))
+      setSavedJobs(jobs)
       setLoading(false)
     }
     load()
@@ -53,24 +61,28 @@ export default function SavedJobsPage() {
   return (
     <div className="flex flex-col">
       <div className="px-5 pt-12 pb-6">
-        <h1 className="text-2xl font-bold text-[#111111]">Saved Jobs</h1>
-        <p className="text-sm text-[#6B7280] mt-1">
-          {savedJobs.length} job{savedJobs.length !== 1 ? 's' : ''} saved
+        <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--et-ink)' }}>
+          Saved Jobs
+        </h1>
+        <p style={{ fontSize: '14px', color: 'var(--et-muted)', marginTop: 4 }}>
+          {loading ? 'Loading…' : `${savedJobs.length} job${savedJobs.length !== 1 ? 's' : ''} saved`}
         </p>
       </div>
 
-      <div className="px-5 pb-4 flex flex-col gap-4">
+      <div className="px-4 pb-4 flex flex-col gap-4">
         {loading ? (
           <div className="flex flex-col items-center gap-3 py-16">
-            <div className="text-4xl loading-text">🔖</div>
-            <p className="text-[#9CA3AF] text-sm">Loading saved jobs…</p>
+            <div className="text-4xl">🔖</div>
+            <p style={{ color: 'var(--et-placeholder)', fontSize: '14px' }}>Loading saved jobs…</p>
           </div>
         ) : savedJobs.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-16 text-center">
-            <span className="text-5xl">📭</span>
+            <span style={{ fontSize: '48px' }}>📭</span>
             <div>
-              <p className="font-semibold text-[#374151]">No saved jobs yet</p>
-              <p className="text-sm text-[#9CA3AF] mt-1">Hit save on any job in your feed</p>
+              <p style={{ fontWeight: 600, color: 'var(--et-subtle)' }}>No saved jobs yet</p>
+              <p style={{ fontSize: '14px', color: 'var(--et-placeholder)', marginTop: 4 }}>
+                Hit save on any job in your feed
+              </p>
             </div>
           </div>
         ) : (
@@ -85,6 +97,7 @@ export default function SavedJobsPage() {
                 job={job}
                 onSave={handleUnsave}
                 isSaved={true}
+                index={i}
               />
             </motion.div>
           ))

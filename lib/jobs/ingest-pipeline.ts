@@ -40,6 +40,14 @@ export interface NormalizedJob {
    * and doesn't need a second content-level check.
    */
   isAggregator?: boolean
+  /**
+   * Set true for curated local-source entries (municipal youth programs, rec
+   * departments, library programs). Their URLs are program pages hand-verified
+   * at curation time — verification still checks HTTP liveness and closed-
+   * application language but skips the ATS job-ID URL pattern requirement.
+   * See VerifyOptions.programPage in verify-url.ts.
+   */
+  isProgramPage?: boolean
 }
 
 export interface IngestStats {
@@ -136,6 +144,7 @@ export async function ingestNormalizedJobs(
         raw.apply_url,
         7000,
         raw.isAggregator ? { title: raw.title, location: raw.location } : undefined,
+        raw.isProgramPage ? { programPage: true } : undefined,
       )
 
       if (verification.status === 'mismatch') {

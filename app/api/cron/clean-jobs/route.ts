@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { verifyBatch, isGenericCareerPage } from '@/lib/jobs/verify-url'
+import { runLocalIngest } from '@/lib/jobs/local-ingest'
 
 // Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
 export const maxDuration = 60
@@ -38,10 +39,23 @@ export async function GET(req: NextRequest) {
     duplicates_removed: 0,
   }
 
+  // ── 0. Curated local sources (Hudson County directory) ──────────────────
+  // Runs here because this route is the one on the GitHub Actions daily
+  // schedule — all 4 Vercel Hobby cron slots are taken by other routes.
+  // Re-verifies in-season entries, deactivates out-of-season ones.
+  try {
+    const localStats = await runLocalIngest(supabase)
+    results.local_verified = localStats.verified
+    results.local_inserted = localStats.inserted
+    results.local_out_of_season = localStats.deactivated_out_of_season
+  } catch (err) {
+    console.log('[cron/clean-jobs] local ingest failed (continuing cleanup):', String(err).slice(0, 200))
+  }
+
   // ── 1. Re-verify the oldest-checked active jobs ────────────────────────
   const { data: jobsToCheck } = await supabase
     .from('jobs')
-    .select('id, apply_url, title, company, location')
+    .select('id, apply_url, title, company, location, source')
     .eq('status', 'active')
     .eq('is_active', true)
     .order('last_checked_at', { ascending: true, nullsFirst: true })
@@ -49,7 +63,15 @@ export async function GET(req: NextRequest) {
 
   if (jobsToCheck && jobsToCheck.length > 0) {
     const verificationResults = await verifyBatch(
-      jobsToCheck.map((j) => ({ id: j.id, apply_url: j.apply_url, title: j.title, location: j.location })),
+      jobsToCheck.map((j) => ({
+        id: j.id,
+        apply_url: j.apply_url,
+        title: j.title,
+        location: j.location,
+        // Without this, every curated program-page job would be rejected as
+        // 'generic' on its first nightly recheck and silently deactivated.
+        programPage: j.source === 'local',
+      })),
       4 // concurrency
     )
 

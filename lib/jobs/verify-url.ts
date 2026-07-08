@@ -45,6 +45,22 @@ export interface ExpectedJobMeta {
   location?: string
 }
 
+export interface VerifyOptions {
+  /**
+   * Curated local-source entries (municipal youth programs, rec departments,
+   * library programs) point at PROGRAM pages, not ATS postings with job IDs —
+   * a specificity check designed for ATS URLs would reject every one of them.
+   * Specificity for these was hand-verified at curation time (each URL was
+   * confirmed to be the actual program/application page, not a careers
+   * homepage). Verification still enforces what automation is FOR here:
+   * HTTP liveness, redirect-to-generic detection, and closed/expired-
+   * application language. It skips only the job-ID URL pattern requirement
+   * and the apply-button text heuristic (municipal pages say "applicants
+   * must..." instead of "apply now", which the heuristic misses).
+   */
+  programPage?: boolean
+}
+
 // Patterns that identify generic career homepages (not specific job postings)
 // A specific job URL always has a unique identifier in the path.
 const GENERIC_PATTERNS: RegExp[] = [
@@ -202,6 +218,7 @@ export async function verifyJobUrl(
   url: string,
   timeoutMs = 6000,
   expected?: ExpectedJobMeta,
+  opts?: VerifyOptions,
 ): Promise<VerificationResult> {
   // Step 1: Reject generic career pages immediately — no network call needed
   if (isGenericCareerPage(url)) {
@@ -274,7 +291,7 @@ export async function verifyJobUrl(
     }
 
     if (res.status === 200 || res.status === 405) {
-      const isSpecific = isSpecificJobPosting(finalUrl || url)
+      const isSpecific = opts?.programPage || isSpecificJobPosting(finalUrl || url)
       if (!isSpecific) {
         return {
           status: 'generic',
@@ -305,7 +322,7 @@ export async function verifyJobUrl(
       // sources never reach this branch (see Step 2 above), so this only
       // applies to aggregator-sourced links where we fetched the real page.
       let has_apply_mechanism: boolean | undefined
-      if (bodyText) {
+      if (bodyText && !opts?.programPage) {
         has_apply_mechanism = hasApplyMechanism(bodyText)
         if (!has_apply_mechanism) {
           return {
@@ -321,10 +338,14 @@ export async function verifyJobUrl(
       let title_match: boolean | undefined
       let location_match: boolean | undefined
 
-      if (bodyText && expected?.title) {
+      // Skipped in programPage mode: curated entries carry editorial titles
+      // ("JC Next Summer Youth Employment (Ages 15–24)") that intentionally
+      // won't appear verbatim on the municipal page — token-overlap matching
+      // would false-reject them.
+      if (bodyText && expected?.title && !opts?.programPage) {
         title_match = checkTitleMatch(bodyText, expected.title)
       }
-      if (bodyText && expected?.location) {
+      if (bodyText && expected?.location && !opts?.programPage) {
         location_match = checkLocationMatch(bodyText, expected.location)
       }
 
@@ -380,9 +401,13 @@ export async function verifyJobUrl(
   }
 }
 
-// Verify a batch of URLs with concurrency control
+// Verify a batch of URLs with concurrency control. Jobs from curated local
+// sources (source === 'local') must set programPage — without it, re-
+// verification would reject their program-page URLs as 'generic' and the
+// nightly cleanup would silently deactivate every local job the morning
+// after it was ingested.
 export async function verifyBatch(
-  jobs: { id: string; apply_url: string; title?: string; location?: string }[],
+  jobs: { id: string; apply_url: string; title?: string; location?: string; programPage?: boolean }[],
   concurrency = 5,
 ): Promise<{ id: string; result: VerificationResult }[]> {
   const results: { id: string; result: VerificationResult }[] = []
@@ -392,10 +417,12 @@ export async function verifyBatch(
     while (queue.length > 0) {
       const job = queue.shift()
       if (!job) break
-      const result = await verifyJobUrl(job.apply_url, 6000, {
-        title: job.title,
-        location: job.location,
-      })
+      const result = await verifyJobUrl(
+        job.apply_url,
+        6000,
+        { title: job.title, location: job.location },
+        job.programPage ? { programPage: true } : undefined,
+      )
       results.push({ id: job.id, result })
       // Small delay to avoid hammering servers
       await new Promise((r) => setTimeout(r, 150))

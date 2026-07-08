@@ -38,6 +38,17 @@ export const TEEN_FRIENDLY_COMPANIES: Record<string, TeenScoreProfile> = {
   sweetgreen: { teen_friendly_score: 86, hiring_speed_score: 75, min_age: 16 },
   walgreen: { teen_friendly_score: 82, hiring_speed_score: 73, min_age: 16 },
   cvs: { teen_friendly_score: 83, hiring_speed_score: 74, min_age: 16 },
+  // Hudson County municipal / program employers (curated local sources).
+  // Youth employment programs are literally designed for teens — max
+  // friendliness. Also matters for detectScamRisk: a recognized employer
+  // zeroes the scam score (hcstonline.org is http://, which would otherwise
+  // score +20 for no-https on a government-run program).
+  'city of jersey city': { teen_friendly_score: 98, hiring_speed_score: 75, min_age: 15 },
+  'jersey city free public library': { teen_friendly_score: 96, hiring_speed_score: 60, min_age: 14 },
+  'city of bayonne': { teen_friendly_score: 96, hiring_speed_score: 78, min_age: 15 },
+  'town of secaucus': { teen_friendly_score: 96, hiring_speed_score: 78, min_age: 15 },
+  'town of west new york': { teen_friendly_score: 96, hiring_speed_score: 78, min_age: 15 },
+  'hcst community resource center': { teen_friendly_score: 92, hiring_speed_score: 70, min_age: 16 },
 }
 
 const DEFAULT_PROFILE: TeenScoreProfile = { teen_friendly_score: 72, hiring_speed_score: 70, min_age: 16 }

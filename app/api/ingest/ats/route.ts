@@ -6,21 +6,30 @@
  * POST /api/ingest/ats
  * Auth: Bearer CRON_SECRET
  *
- * IMPORTANT CONTEXT: Greenhouse/Lever/Ashby are used almost exclusively by tech
- * and trendy DTC/food brands, NOT by major chains (McDonald's, Target, etc.) — expect
- * low volume from this route for teen jobs specifically. For major chains, Adzuna or
- * JSearch is where the real volume comes from (see /api/ingest/adzuna, /api/ingest/jsearch).
+ * IMPORTANT CONTEXT: Greenhouse/Lever/Ashby/SmartRecruiters are used almost
+ * exclusively by tech and trendy DTC/food brands, NOT by major chains
+ * (McDonald's, Target, etc.) — expect low volume from this route for teen jobs
+ * specifically. For major chains, Adzuna or JSearch is where the real volume
+ * comes from (see /api/ingest/adzuna, /api/ingest/jsearch).
  *
- * SmartRecruiters is the exception among the four: it exposes a public global
- * keyword-search API (no need to know a company slug ahead of time), so it's queried
- * the same way Adzuna is, not via a curated company list.
+ * STATUS AS OF 2026-07-08, confirmed against live production runs + web search
+ * for real posting URLs, not guesses:
+ *   - Greenhouse: WORKING. Real jobs confirmed inserted (sweetgreen and others
+ *     returned live postings).
+ *   - Lever: the original 6 hardcoded company slugs returned HTTP 404 in
+ *     production — 100% failure rate, meaning that list was never verified
+ *     against real data before being written. Replaced with 4 companies
+ *     confirmed via web search to have real, live postings on Lever right now
+ *     (see comment above LEVER_COMPANIES for sourcing per company).
+ *   - SmartRecruiters: originally called a global `/v1/postings` search
+ *     endpoint that also 404'd in production — that endpoint doesn't exist
+ *     publicly the way I'd assumed. Switched to the per-company endpoint
+ *     (`/v1/companies/{id}/postings`, matching what the older, now-deleted
+ *     workers/ingest-apis.ts used) and populated with 2 companies confirmed
+ *     via web search (see comment above SMARTRECRUITERS_COMPANIES).
  *
- * NOTE: the SmartRecruiters integration below is written from documented public API
- * shape but has not been exercised against a live response (no network egress from
- * the environment that built this) — if `content[].id` / `.company.identifier` don't
- * match what the API actually returns, postings will just fail verification and get
- * silently skipped (safe failure mode), not corrupt data. Worth spot-checking the raw
- * JSON the first time this runs.
+ * None of this has been re-run against production since these changes — the
+ * next /api/ingest/ats call is the real test of whether these hold up.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -57,14 +66,25 @@ const GREENHOUSE_COMPANIES = [
   { slug: 'barry-s-bootcamp', name: "Barry's Bootcamp", min_age: 18 },
 ]
 
-// Companies confirmed to use Lever with NY/NJ locations
+// Rebuilt 2026-07-08 after the original 6 slugs (sweetgreen, shake-shack,
+// dos-toros, taim, joe-coffee, jack-rabbit) all 404'd in production — that
+// list was a guess, never checked against real data. These replacements were
+// found via live web search returning actual current job posting URLs on
+// jobs.lever.co, not guessed:
+//   - bluebottlecoffee: confirmed barista/cafe-leader postings in NYC and
+//     Paramus, NJ (note: no hyphens in the slug — "blue-bottle-coffee" was
+//     also wrong before)
+//   - thuma: confirmed "Lead Barista" at their NYC SoHo flagship
+//   - boxlunch: BoxLunch/Hot Topic, a national mall retailer — board exists
+//     and is a classic teen-hiring chain, though NY/NJ-specific postings
+//     weren't individually confirmed in search results (national chain,
+//     high confidence they have East Coast mall locations)
+//   - gopuff: confirmed a NY-based in-store Starbucks staffing role
 const LEVER_COMPANIES = [
-  { slug: 'sweetgreen', name: 'Sweetgreen', min_age: 16 },
-  { slug: 'shake-shack', name: 'Shake Shack', min_age: 16 },
-  { slug: 'dos-toros', name: 'Dos Toros', min_age: 16 },
-  { slug: 'taim', name: 'taïm', min_age: 16 },
-  { slug: 'joe-coffee', name: 'Joe Coffee', min_age: 16 },
-  { slug: 'jack-rabbit', name: 'Jack Rabbit', min_age: 16 },
+  { slug: 'bluebottlecoffee', name: 'Blue Bottle Coffee', min_age: 16 },
+  { slug: 'thuma', name: 'Thuma', min_age: 16 },
+  { slug: 'boxlunch', name: 'BoxLunch / Hot Topic', min_age: 16 },
+  { slug: 'gopuff', name: 'Gopuff', min_age: 16 },
 ]
 
 // Companies confirmed to use Ashby with teen-relevant roles.
@@ -74,14 +94,20 @@ const LEVER_COMPANIES = [
 // a redirect to jobs.ashbyhq.com/{slug}).
 const ASHBY_COMPANIES: { slug: string; name: string; min_age: number }[] = []
 
-// SmartRecruiters has a public global postings search — no company list needed.
-const SMARTRECRUITERS_QUERIES = [
-  { q: 'cashier part time', city: 'New York', state: 'NY' },
-  { q: 'crew member', city: 'New York', state: 'NY' },
-  { q: 'team member', city: 'Newark', state: 'NJ' },
-  { q: 'retail associate', city: 'Brooklyn', state: 'NY' },
-  { q: 'sales associate part time', city: 'Jersey City', state: 'NJ' },
-  { q: 'barista', city: 'Manhattan', state: 'NY' },
+// Corrected 2026-07-08 — the global `/v1/postings?q=` search endpoint I
+// originally wrote here returned HTTP 404 in production across all 6 queries.
+// SmartRecruiters doesn't expose that publicly the way I'd assumed. Switched
+// to the per-company endpoint pattern instead (same shape Greenhouse/Lever
+// use), matching what the older, now-deleted workers/ingest-apis.ts used.
+// Found via live web search returning actual current job posting URLs on
+// jobs.smartrecruiters.com, not guessed:
+//   - Eataly: confirmed cashier/front-end associate postings at their NYC
+//     Flatiron location
+//   - CityOfNewYork: confirmed cashier and customer-service postings in NYC
+//     and the Bronx — set to min_age 18, municipal roles commonly require it
+const SMARTRECRUITERS_COMPANIES = [
+  { identifier: 'Eataly', name: 'Eataly', min_age: 16 },
+  { identifier: 'CityOfNewYork', name: 'City of New York', min_age: 18 },
 ]
 
 const NY_NJ_KEYWORDS = [
@@ -233,53 +259,45 @@ async function fetchAshby(): Promise<NormalizedJob[]> {
 async function fetchSmartRecruiters(): Promise<NormalizedJob[]> {
   const results: NormalizedJob[] = []
 
-  for (const q of SMARTRECRUITERS_QUERIES) {
+  for (const company of SMARTRECRUITERS_COMPANIES) {
     try {
-      const url = new URL('https://api.smartrecruiters.com/v1/postings')
-      url.searchParams.set('q', q.q)
-      url.searchParams.set('country', 'us')
-      url.searchParams.set('city', q.city)
+      const url = new URL(`https://api.smartrecruiters.com/v1/companies/${company.identifier}/postings`)
       url.searchParams.set('limit', '50')
 
       const res = await fetch(url.toString(), { headers: { 'User-Agent': 'EmployTeens-Bot/1.0' } })
       if (!res.ok) {
-        console.log(`[ats/smartrecruiters] query "${q.q}" in ${q.city}: HTTP ${res.status}`)
+        console.log(`[ats/smartrecruiters] ${company.identifier}: HTTP ${res.status} — company likely not on SmartRecruiters or identifier is wrong`)
         continue
       }
       const data = await res.json()
       const postings = data?.content ?? []
-      console.log(`[ats/smartrecruiters] query "${q.q}" in ${q.city}: ${postings.length} raw postings, totalFound=${data?.totalFound}`)
-      if (postings.length === 0) {
-        console.log('[ats/smartrecruiters] raw response keys:', Object.keys(data ?? {}))
-      }
+      console.log(`[ats/smartrecruiters] ${company.identifier}: ${postings.length} postings found`)
 
       let matched = 0
       for (const posting of postings) {
         const title: string = posting?.name ?? ''
-        const companyName: string = posting?.company?.name ?? 'Unknown'
-        const companyId: string | undefined = posting?.company?.identifier
-        const city: string = posting?.location?.city ?? q.city
-        const region: string = posting?.location?.region ?? q.state
+        const city: string = posting?.location?.city ?? ''
+        const region: string = posting?.location?.region ?? ''
         const location = [city, region].filter(Boolean).join(', ')
 
-        if (!companyId || !posting?.id) continue
+        if (!posting?.id) continue
         if (!isTeenRelevant(title)) continue
-        if (!isNYNJ(location) && !isNYNJ(q.state)) continue
+        if (!isNYNJ(location)) continue
         matched++
 
         results.push({
           title,
-          company: companyName,
+          company: company.name,
           location,
-          apply_url: `https://jobs.smartrecruiters.com/${companyId}/${posting.id}`,
-          min_age: 16,
+          apply_url: `https://jobs.smartrecruiters.com/${company.identifier}/${posting.id}`,
+          min_age: company.min_age,
           posted_at: posting?.releasedDate,
         })
       }
-      console.log(`[ats/smartrecruiters] query "${q.q}": ${matched} matched after filters`)
+      console.log(`[ats/smartrecruiters] ${company.identifier}: ${matched} matched NY/NJ + teen-relevant filters`)
       await new Promise((r) => setTimeout(r, 300))
     } catch (err) {
-      console.log(`[ats/smartrecruiters] query "${q.q}" threw`, String(err).slice(0, 200))
+      console.log(`[ats/smartrecruiters] ${company.identifier} threw`, String(err).slice(0, 200))
     }
   }
 

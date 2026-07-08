@@ -157,14 +157,22 @@ async function fetchLever(): Promise<NormalizedJob[]> {
         `https://api.lever.co/v0/postings/${company.slug}?mode=json`,
         { headers: { 'User-Agent': 'EmployTeens-Bot/1.0' } }
       )
-      if (!res.ok) continue
+      if (!res.ok) {
+        console.log(`[ats/lever] ${company.slug}: HTTP ${res.status} — company likely no longer on Lever or slug is wrong`)
+        continue
+      }
       const jobs = await res.json()
-      if (!Array.isArray(jobs)) continue
+      if (!Array.isArray(jobs)) {
+        console.log(`[ats/lever] ${company.slug}: response was not an array, got`, typeof jobs)
+        continue
+      }
 
+      let matched = 0
       for (const job of jobs) {
         const location: string = job.categories?.location ?? job.text ?? ''
         if (!isNYNJ(location)) continue
         if (!isTeenRelevant(job.text, job.descriptionPlain)) continue
+        matched++
 
         results.push({
           title: job.text,
@@ -176,8 +184,9 @@ async function fetchLever(): Promise<NormalizedJob[]> {
           posted_at: job.createdAt ? new Date(job.createdAt).toISOString() : undefined,
         })
       }
-    } catch {
-      // skip
+      console.log(`[ats/lever] ${company.slug}: ${jobs.length} postings found, ${matched} matched NY/NJ + teen-relevant filters`)
+    } catch (err) {
+      console.log(`[ats/lever] ${company.slug}: fetch threw`, String(err).slice(0, 200))
     }
     await new Promise((r) => setTimeout(r, 200))
   }
@@ -233,10 +242,19 @@ async function fetchSmartRecruiters(): Promise<NormalizedJob[]> {
       url.searchParams.set('limit', '50')
 
       const res = await fetch(url.toString(), { headers: { 'User-Agent': 'EmployTeens-Bot/1.0' } })
-      if (!res.ok) continue
+      if (!res.ok) {
+        console.log(`[ats/smartrecruiters] query "${q.q}" in ${q.city}: HTTP ${res.status}`)
+        continue
+      }
       const data = await res.json()
+      const postings = data?.content ?? []
+      console.log(`[ats/smartrecruiters] query "${q.q}" in ${q.city}: ${postings.length} raw postings, totalFound=${data?.totalFound}`)
+      if (postings.length === 0) {
+        console.log('[ats/smartrecruiters] raw response keys:', Object.keys(data ?? {}))
+      }
 
-      for (const posting of data?.content ?? []) {
+      let matched = 0
+      for (const posting of postings) {
         const title: string = posting?.name ?? ''
         const companyName: string = posting?.company?.name ?? 'Unknown'
         const companyId: string | undefined = posting?.company?.identifier
@@ -247,6 +265,7 @@ async function fetchSmartRecruiters(): Promise<NormalizedJob[]> {
         if (!companyId || !posting?.id) continue
         if (!isTeenRelevant(title)) continue
         if (!isNYNJ(location) && !isNYNJ(q.state)) continue
+        matched++
 
         results.push({
           title,
@@ -257,9 +276,10 @@ async function fetchSmartRecruiters(): Promise<NormalizedJob[]> {
           posted_at: posting?.releasedDate,
         })
       }
+      console.log(`[ats/smartrecruiters] query "${q.q}": ${matched} matched after filters`)
       await new Promise((r) => setTimeout(r, 300))
-    } catch {
-      // skip
+    } catch (err) {
+      console.log(`[ats/smartrecruiters] query "${q.q}" threw`, String(err).slice(0, 200))
     }
   }
 

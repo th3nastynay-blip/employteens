@@ -50,6 +50,7 @@ export interface IngestStats {
   rejected_url: number
   rejected_mismatch: number
   rejected_scam: number
+  rejected_no_apply: number
   inserted: number
   updated: number
   duplicate: number
@@ -78,6 +79,7 @@ export async function ingestNormalizedJobs(
     rejected_url: 0,
     rejected_mismatch: 0,
     rejected_scam: 0,
+    rejected_no_apply: 0,
     inserted: 0,
     updated: 0,
     duplicate: 0,
@@ -122,6 +124,11 @@ export async function ingestNormalizedJobs(
 
     if (verification.status === 'mismatch') {
       stats.rejected_mismatch++
+      continue
+    }
+
+    if (verification.status === 'no_apply_mechanism') {
+      stats.rejected_no_apply++
       continue
     }
 
@@ -205,7 +212,7 @@ export async function ingestNormalizedJobs(
     source,
     jobs_fetched: stats.fetched,
     jobs_inserted: stats.inserted,
-    jobs_rejected: stats.rejected_generic + stats.rejected_url + stats.rejected_mismatch + stats.rejected_scam,
+    jobs_rejected: stats.rejected_generic + stats.rejected_url + stats.rejected_mismatch + stats.rejected_scam + stats.rejected_no_apply,
     jobs_deduplicated: stats.duplicate,
     started_at: runStartedAt,
     completed_at: new Date().toISOString(),

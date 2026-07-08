@@ -74,21 +74,25 @@ export async function GET(req: NextRequest) {
   let totalExpiredByCleanup = 0
   let totalDuplicatesDeactivated = 0
   let totalRemovedByPurge = 0
-  const perSourceTotals: Record<string, { fetched: number; imported: number; rejected: number }> = {}
+  const perSourceTotals: Record<string, { fetched: number; imported: number; rejected: number; deduplicated: number }> = {}
 
   for (const log of logs ?? []) {
-    totalFetched += log.jobs_fetched ?? 0
-
+    // Only count `jobs_fetched` for actual ingestion-source rows — `cleanup`
+    // and `purge` rows reuse that column for a different concept (jobs
+    // scanned during cleanup/purge, not jobs fetched from an external API),
+    // and mixing them in here would inflate this total with unrelated numbers.
     if (INGESTION_SOURCES.includes(log.source)) {
+      totalFetched += log.jobs_fetched ?? 0
       totalImported += log.jobs_inserted ?? 0
       totalRejectedDuringIngestion += log.jobs_rejected ?? 0
       const details = (log.details ?? {}) as IngestDetails
       totalVerifiedDuringIngestion += details.verified ?? 0
 
-      if (!perSourceTotals[log.source]) perSourceTotals[log.source] = { fetched: 0, imported: 0, rejected: 0 }
+      if (!perSourceTotals[log.source]) perSourceTotals[log.source] = { fetched: 0, imported: 0, rejected: 0, deduplicated: 0 }
       perSourceTotals[log.source].fetched += log.jobs_fetched ?? 0
       perSourceTotals[log.source].imported += log.jobs_inserted ?? 0
       perSourceTotals[log.source].rejected += log.jobs_rejected ?? 0
+      perSourceTotals[log.source].deduplicated += log.jobs_deduplicated ?? 0
     } else if (log.source === 'cleanup') {
       const details = (log.details ?? {}) as CleanupDetails
       totalExpiredByCleanup += details.deactivated_expired ?? 0

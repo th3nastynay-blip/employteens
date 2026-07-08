@@ -27,6 +27,7 @@ export type VerificationStatus =
   | 'error'
   | 'unverified'
   | 'mismatch'
+  | 'no_apply_mechanism'
 
 export interface VerificationResult {
   status: VerificationStatus
@@ -36,6 +37,7 @@ export interface VerificationResult {
   final_url?: string
   title_match?: boolean
   location_match?: boolean
+  has_apply_mechanism?: boolean
 }
 
 export interface ExpectedJobMeta {
@@ -97,11 +99,13 @@ const SPECIFIC_JOB_PATTERNS: RegExp[] = [
   /[?&]jk=[a-z0-9]+/i,                     // Indeed: ?jk=abc123
   /[?&]jobId=\d+/i,                         // ?jobId=12345
   /[?&]job[-_]?id=\d+/i,                   // ?job_id=12345
+  /[?&]jid=[a-z0-9]+/i,                    // ZipRecruiter: ?jid=abc123
   /\/view[-_]?job[s]?\//i,                  // /viewjob/
   /greenhouse\.io.*\/jobs\/\d+/i,           // Greenhouse specific
   /lever\.co\/[^/]+\/[a-f0-9-]{36}/i,      // Lever UUID
   /ashbyhq\.com.*\/[a-f0-9-]{36}/i,        // Ashby UUID
   /smartrecruiters\.com\/[^/]+\/\d{5,}/i,  // SmartRecruiters: /{company}/{numeric-id}-{slug}
+  /linkedin\.com\/jobs\/view\/[a-z0-9%-]+-\d{6,}/i, // LinkedIn: /jobs/view/{slug}-{long numeric id}
 ]
 
 // Phrases that indicate a posting is no longer accepting applications, even
@@ -118,6 +122,25 @@ const CLOSED_POSTING_PATTERNS: RegExp[] = [
   /this vacancy (is|has) (closed|expired)/i,
   /req(uisition)? (has been )?(closed|cancelled|canceled)/i,
 ]
+
+// Signals that a page actually has some way to apply — a real job posting
+// virtually always mentions one of these somewhere (a button label, a "How to
+// Apply" header, an ATS embed, etc). Deliberately a low, forgiving bar: this
+// isn't parsing the DOM for a real <button>/<form>, just checking the raw text
+// for any application-intent language at all. If NONE of these appear
+// anywhere on the page, that's a real red flag worth excluding on, not a false
+// positive risk — legitimate postings essentially always clear this.
+const APPLY_INDICATOR_PATTERNS: RegExp[] = [
+  /\bapply\b/i,
+  /submit\s*(your\s*)?(application|resume)/i,
+  /send\s*(your\s*)?resume/i,
+  /how to apply/i,
+  /application form/i,
+]
+
+function hasApplyMechanism(text: string): boolean {
+  return APPLY_INDICATOR_PATTERNS.some((p) => p.test(text))
+}
 
 const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'a', 'an', 'to', 'in', 'at', 'of', 'or', 'is',
@@ -278,6 +301,23 @@ export async function verifyJobUrl(
         }
       }
 
+      // Only meaningful when we actually have body text to check — ATS-direct
+      // sources never reach this branch (see Step 2 above), so this only
+      // applies to aggregator-sourced links where we fetched the real page.
+      let has_apply_mechanism: boolean | undefined
+      if (bodyText) {
+        has_apply_mechanism = hasApplyMechanism(bodyText)
+        if (!has_apply_mechanism) {
+          return {
+            status: 'no_apply_mechanism',
+            http_status: res.status,
+            is_active: false,
+            reason: 'Page loads and matches the posting, but no application mechanism (apply button/link/form language) was found anywhere on it',
+            has_apply_mechanism: false,
+          }
+        }
+      }
+
       let title_match: boolean | undefined
       let location_match: boolean | undefined
 
@@ -310,6 +350,7 @@ export async function verifyJobUrl(
         final_url: finalUrl !== url ? finalUrl : undefined,
         title_match,
         location_match,
+        has_apply_mechanism,
       }
     }
 

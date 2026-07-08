@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
   for (const f of failed) {
     const category = f.http_status === 404 ? '404 Not Found'
       : f.reason.toLowerCase().includes('closed/expired/filled') ? 'Posting closed (200 but expired language)'
+      : f.reason.toLowerCase().includes('no application mechanism') ? 'No apply mechanism found on page'
       : f.reason.toLowerCase().includes("doesn't match expected") ? 'Title/location mismatch'
       : f.reason.toLowerCase().includes('generic') ? 'Generic career page'
       : f.reason.toLowerCase().includes('redirect') ? 'Redirects to generic page'

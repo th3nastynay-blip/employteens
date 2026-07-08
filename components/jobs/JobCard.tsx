@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { recordApplyClick } from '@/lib/apply-tracking'
 import type { JobMatch } from '@/lib/types/database'
 
 interface JobCardProps {
@@ -81,28 +82,21 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
     // Open the official application URL
     window.open(job.apply_url, '_blank', 'noopener,noreferrer')
 
-    // Record the application attempt in the database
+    // Do NOT mark as applied — clicking Apply only means they opened the
+    // page. The pending click is recorded locally; when the user returns,
+    // ApplyConfirmSheet asks "Did you apply?" and only a confirmed Yes
+    // writes status='applied'. Analytics still capture the click itself.
+    recordApplyClick({ id: job.id, title: job.title, company: job.company })
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      // Upsert: if already saved/applied, don't downgrade the status
-      const { data: existing } = await supabase
-        .from('applications')
-        .select('status')
-        .eq('user_id', user.id)
-        .eq('job_id', job.id)
-        .single()
-
-      // Only write if no record exists or status is just 'saved'
-      if (!existing || existing.status === 'saved') {
-        await supabase.from('applications').upsert({
-          user_id: user.id,
-          job_id: job.id,
-          status: 'applied',
-        })
-      }
+      await supabase.from('analytics_events').insert({
+        user_id: user.id,
+        event_type: 'apply_click',
+        job_id: job.id,
+        metadata: {},
+      })
     } catch {
       // Non-critical — don't block the apply action
     }

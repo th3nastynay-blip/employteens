@@ -107,9 +107,12 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
   const reasons = parseReasons(job.match_explanation)
   const hasPay = job.salary_min || job.salary_max
 
-  // Trust badges — all computed from real verification/posting data
+  // Trust badges — all computed from real verification/posting data.
+  // "now" is captured once on mount (useState initializer) to keep render
+  // pure; badge granularity is days, so a stale-by-minutes value is fine.
+  const [now] = useState(() => Date.now())
   const verifiedDaysAgo = job.last_verified_at
-    ? Math.floor((Date.now() - new Date(job.last_verified_at).getTime()) / 86_400_000)
+    ? Math.floor((now - new Date(job.last_verified_at).getTime()) / 86_400_000)
     : null
   const verifiedLabel = verifiedDaysAgo === null
     ? null
@@ -119,7 +122,7 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
         ? 'Verified this week'
         : null
   const isNew = job.posted_at
-    ? (Date.now() - new Date(job.posted_at).getTime()) / 86_400_000 <= 3
+    ? (now - new Date(job.posted_at).getTime()) / 86_400_000 <= 3
     : false
   const teenFavorite = job.teen_friendly_score >= 90
 

@@ -17,7 +17,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import { verifyJobUrl, isGenericCareerPage } from './verify-url'
-import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk } from './teen-scoring'
+import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, resolveMinAge } from './teen-scoring'
 
 export interface NormalizedJob {
   title: string
@@ -210,7 +210,7 @@ export async function ingestNormalizedJobs(
         zip_code: v.raw.zip_code ?? '00000',
         apply_url: v.finalUrl,
         source,
-        min_age: v.raw.min_age ?? profile.min_age,
+        min_age: v.raw.min_age ?? resolveMinAge(v.raw.title, v.raw.company),
         description: v.raw.description?.slice(0, 800) ?? '',
         experience_required: 'none',
         teen_friendly_score: teenScore,

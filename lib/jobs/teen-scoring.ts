@@ -50,6 +50,41 @@ export function getCompanyProfile(company: string): TeenScoreProfile {
   return DEFAULT_PROFILE
 }
 
+// Role types federal law and most employers actually allow at 14-15, even
+// when the specific employer isn't a recognized brand name. Added after
+// discovering min_age was being assigned purely by company-name matching,
+// which misses franchise locations posted under a franchisee's LLC name
+// (e.g. "ABC Foods LLC dba McDonald's") instead of the brand itself — those
+// would otherwise silently default to 16 and disappear for younger teens.
+const YOUNG_TEEN_TITLE_PATTERNS: RegExp[] = [
+  /usher/i,
+  /concession/i,
+  /\bbagger\b/i,
+  /grocery bagg/i,
+  /ice cream/i,
+  /\bscooper\b/i,
+  /amusement/i,
+  /recreation attendant/i,
+  /movie theater/i,
+  /theater attendant/i,
+]
+
+/**
+ * Resolves min_age using company match first (trusted — could be higher OR
+ * lower than the 16 default), falling back to title-based role recognition
+ * when the company is unrecognized, before finally falling back to the
+ * conservative 16 default.
+ */
+export function resolveMinAge(title: string, company: string): number {
+  const lower = company.toLowerCase()
+  const companyMatch = Object.entries(TEEN_FRIENDLY_COMPANIES).find(([key]) => lower.includes(key))
+  if (companyMatch) return companyMatch[1].min_age
+
+  if (YOUNG_TEEN_TITLE_PATTERNS.some((p) => p.test(title))) return 14
+
+  return DEFAULT_PROFILE.min_age
+}
+
 export function scoreTeenFriendliness(input: TeenScoreInput): number {
   const profile = getCompanyProfile(input.company)
   let score = profile.teen_friendly_score

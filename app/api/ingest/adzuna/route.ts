@@ -32,8 +32,20 @@ const SEARCH_QUERIES = [
   { q: 'crew member part time', where: 'New Jersey', state: 'NJ' },
   { q: 'cashier entry level', where: 'New Jersey', state: 'NJ' },
   { q: 'team member no experience', where: 'New Jersey', state: 'NJ' },
-  { q: 'food service part time 16', where: 'New York', state: 'NY' },
   { q: 'retail associate high school', where: 'New York', state: 'NY' },
+  // Added after discovering zero jobs existed for a 14-year-old test account —
+  // every currently-verified job required 16+. Company-name-based min_age
+  // assignment (getCompanyProfile) misses franchise locations posted under a
+  // franchisee's LLC name instead of the brand name, so these target the
+  // *role types* federal law and most employers actually allow at 14-15
+  // (movie theaters, grocery bagging, ice cream/concessions, rec/amusement)
+  // rather than relying on brand-name matching alone.
+  { q: 'movie theater usher concessions', where: 'New York', state: 'NY' },
+  { q: 'grocery bagger', where: 'New York', state: 'NY' },
+  { q: 'ice cream shop scooper', where: 'New York', state: 'NY' },
+  { q: 'amusement park recreation attendant', where: 'New York', state: 'NY' },
+  { q: 'movie theater usher concessions', where: 'New Jersey', state: 'NJ' },
+  { q: 'grocery bagger', where: 'New Jersey', state: 'NJ' },
 ]
 
 // Company-specific searches for major teen employers

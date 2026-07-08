@@ -46,17 +46,26 @@ export async function GET(req: NextRequest) {
   // ── Current snapshot: what's actually in the jobs table right now ──────────
   const { data: allJobs } = await supabase
     .from('jobs')
-    .select('source, verification_status, is_active, status')
+    .select('source, verification_status, is_active, status, min_age')
 
   const bySource: Record<string, number> = {}
   const byVerificationStatus: Record<string, number> = {}
+  // Tracks whether the app actually has coverage across the full 14-19 teen
+  // range, not just 16+ — added after discovering a 14-year-old test account
+  // got zero matches because every currently-live job requires 16+.
+  const byMinAgeVisible: Record<string, number> = {}
   let currentlyVerified = 0
   let currentlyActive = 0
 
   for (const job of allJobs ?? []) {
     bySource[job.source] = (bySource[job.source] ?? 0) + 1
     byVerificationStatus[job.verification_status] = (byVerificationStatus[job.verification_status] ?? 0) + 1
-    if (job.verification_status === 'verified' && job.is_active && job.status === 'active') currentlyVerified++
+    const isVisible = job.verification_status === 'verified' && job.is_active && job.status === 'active'
+    if (isVisible) {
+      currentlyVerified++
+      const ageKey = job.min_age <= 14 ? '14' : job.min_age === 15 ? '15' : job.min_age === 16 ? '16' : job.min_age === 17 ? '17' : '18+'
+      byMinAgeVisible[ageKey] = (byMinAgeVisible[ageKey] ?? 0) + 1
+    }
     if (job.is_active) currentlyActive++
   }
 
@@ -121,6 +130,7 @@ export async function GET(req: NextRequest) {
       currently_active_flag: currentlyActive,
       by_source: bySource,
       by_verification_status: byVerificationStatus,
+      by_min_age_of_visible_jobs: byMinAgeVisible,
     },
 
     cumulative_since_tracking_began: {

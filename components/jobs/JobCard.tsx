@@ -107,6 +107,22 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
   const reasons = parseReasons(job.match_explanation)
   const hasPay = job.salary_min || job.salary_max
 
+  // Trust badges — all computed from real verification/posting data
+  const verifiedDaysAgo = job.last_verified_at
+    ? Math.floor((Date.now() - new Date(job.last_verified_at).getTime()) / 86_400_000)
+    : null
+  const verifiedLabel = verifiedDaysAgo === null
+    ? null
+    : verifiedDaysAgo <= 0
+      ? 'Verified today'
+      : verifiedDaysAgo <= 7
+        ? 'Verified this week'
+        : null
+  const isNew = job.posted_at
+    ? (Date.now() - new Date(job.posted_at).getTime()) / 86_400_000 <= 3
+    : false
+  const teenFavorite = job.teen_friendly_score >= 90
+
   return (
     <motion.div
       layout
@@ -123,10 +139,15 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
         <MatchRing score={job.match_score} />
 
         <div className="flex-1 min-w-0 pt-0.5">
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="match-gradient-text" style={{ fontSize: '13px', fontWeight: 800 }}>
               {matchLabel}
             </span>
+            {isNew && (
+              <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
+                New
+              </span>
+            )}
             {hiresfast && (
               <span className="badge badge-amber" style={{ fontSize: '10px', padding: '2px 7px' }}>
                 ⚡ Hires Fast
@@ -211,12 +232,20 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
       {/* ── Logistics + actions ── */}
       <div className="px-5 pt-3.5 pb-4 flex flex-col gap-3.5">
         <div className="flex flex-wrap gap-2">
+          {verifiedLabel && (
+            <span className="badge badge-green" title="We re-check every listing's application link automatically">
+              ✓ {verifiedLabel}
+            </span>
+          )}
           {job.distance_miles !== undefined && (
             <span className="badge badge-subtle">
               📍 {job.distance_miles < 1 ? 'Under 1 mi' : `${job.distance_miles.toFixed(1)} mi`}
             </span>
           )}
           <span className="badge badge-green">Ages {job.min_age}+</span>
+          {teenFavorite && (
+            <span className="badge badge-subtle">💜 Teen favorite</span>
+          )}
           {job.experience_required === 'none' && (
             <span className="badge badge-blue">No experience needed</span>
           )}

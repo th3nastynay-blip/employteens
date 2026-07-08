@@ -29,10 +29,34 @@ export interface JobContext {
     title: string | undefined
     company: string | undefined
     status: string
+    /** ISO timestamp of the last status change — lets the coach say "you applied 9 days ago" */
+    updated_at?: string
   }[]
 }
 
-function buildSystemPrompt(userProfile?: UserProfile, jobContext?: JobContext): string {
+export interface CoachPromptExtras {
+  /** Precomputed proactive insights (lib/ai/coach-insights.ts) */
+  insights?: { type: string; text: string }[]
+}
+
+function daysAgoLabel(iso?: string): string {
+  if (!iso) return ''
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  if (d <= 0) return ' (today)'
+  if (d === 1) return ' (yesterday)'
+  return ` (${d} days ago)`
+}
+
+function buildSystemPrompt(
+  userProfile?: UserProfile,
+  jobContext?: JobContext,
+  extras?: CoachPromptExtras,
+): string {
+  const availability = userProfile?.availability as Record<string, boolean> | undefined
+  const availableDays = availability
+    ? Object.entries(availability).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none set'
+    : 'unknown'
+
   const profile = userProfile
     ? `
 ## User Profile
@@ -40,6 +64,7 @@ function buildSystemPrompt(userProfile?: UserProfile, jobContext?: JobContext): 
 - Age: ${userProfile.age}
 - State: ${userProfile.state}, ZIP: ${userProfile.zip_code}
 - Grade: ${userProfile.school_grade}, School ends: ${userProfile.school_end_time}
+- Days available to work: ${availableDays}
 - Transportation: ${userProfile.transportation}
 - Skills: ${(userProfile.skills as string[]).join(', ') || 'none listed'}
 - Interests: ${(userProfile.interests as string[]).join(', ') || 'none listed'}
@@ -70,28 +95,31 @@ ${profile}
 - If they say something vague, ask one clarifying question instead of guessing
 
 ## Key Facts (NY/NJ Teen Labor)
-- Minimum age to work in most retail/food: 14 (with work permit)
-- NY minimum wage: $16/hr (NYC), $15/hr (rest of NY)
-- NJ minimum wage: $15.49/hr
-- Teens under 18 need an "Employment Certificate" (work permit) from their school
-- Hours limits: 14-15 year olds can work max 3 hrs/day on school days, 8 hrs on non-school days
-- Best companies that hire at 14-15: AMC Theatres, McDonald's, some grocery stores, Chick-fil-A
+- Minimum LEGAL age to work in most retail/food: 14 (with working papers) — but most employers set their own floor at 16, and that's the honest reality to share
+- Minimum wage: roughly $16/hr in NYC and ~$15–16/hr in NJ — rates adjust annually, so say "around" and suggest checking the current rate rather than quoting an exact number
+- NJ teens under 18 need working papers via MyWorkingPapers.nj.gov (online since 2023 — schools no longer issue them in NJ). NY still issues Employment Certificates through schools.
+- Hours limits: 14-15 year olds max 3 hrs/day on school days, 8 hrs on non-school days
+- Realistic 14-15 hirers: AMC Theatres (14-17 per school work permit), city youth employment programs (usually 15+, apply in spring), library volunteer-to-paid paths, some grocery/ice cream shops
 
 Always be accurate about these rules — incorrect labor law info could harm the user.
 
 ## CRITICAL RULES
-- NEVER invent job listings. Only recommend jobs from the "Current Job Matches" section below.
+- NEVER invent job listings. Only recommend jobs from the "Top Job Matches" section below.
 - If asked "what jobs should I apply for?" or similar, reference ONLY the jobs listed below.
 - If no jobs are listed or none match, say so honestly and give general strategy advice instead.
 - When recommending a specific job, always include the company name, location, and match score.
+- PLATFORM DATA BEATS GENERIC ADVICE. If the user's question can be answered with their actual matches, applications, availability, or the insights below, use that data. Only fall back to general advice when the platform has nothing relevant.
+${extras?.insights && extras.insights.length > 0 ? `
+## Proactive Insights (computed from this user's real data — surface the most relevant one when it fits the conversation, especially in your first reply)
+${extras.insights.map((i) => `- ${i.text}`).join('\n')}` : ''}
 ${jobContext && jobContext.topMatches.length > 0 ? `
 ## Top Job Matches (use ONLY these when recommending jobs — do not invent others)
 ${jobContext.topMatches.slice(0, 8).map((j, i) =>
   `${i + 1}. ${j.title} @ ${j.company}, ${j.location} — ${j.match_score}% match. ${j.pay ?? 'Pay TBD'}. Age ${j.min_age}+. ${j.no_experience ? 'No exp needed.' : ''} ${j.hires_fast ? 'Hires fast.' : ''}`
 ).join('\n')}` : '\n## Job Matches: None yet — give general advice.\n'}
 ${jobContext && jobContext.recentApplications.length > 0 ? `
-## User's Application History
-${jobContext.recentApplications.map((a) => `- ${a.title} at ${a.company}: ${a.status}`).join('\n')}
+## User's Application History (status + when it last changed)
+${jobContext.recentApplications.map((a) => `- ${a.title} at ${a.company}: ${a.status}${daysAgoLabel(a.updated_at)}`).join('\n')}
 ` : ''}`
 }
 
@@ -99,6 +127,7 @@ export async function getStreamingChatResponse(
   messages: ChatMessage[],
   userProfile?: UserProfile,
   jobContext?: JobContext,
+  extras?: CoachPromptExtras,
 ): Promise<Response> {
   const apiKey = process.env.GROQ_API_KEY
 
@@ -106,7 +135,7 @@ export async function getStreamingChatResponse(
     return getFallbackStream(messages[messages.length - 1]?.content ?? '')
   }
 
-  const systemPrompt = buildSystemPrompt(userProfile, jobContext)
+  const systemPrompt = buildSystemPrompt(userProfile, jobContext, extras)
 
   // Groq is OpenAI-compatible — no translation layer needed
   // llama-3.3-70b-versatile: free, fast, great quality

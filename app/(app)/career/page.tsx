@@ -146,14 +146,29 @@ function MessageBubble({ message, isLast }: { message: Message; isLast: boolean 
   )
 }
 
+interface Insight {
+  type: string
+  text: string
+  prompt: string
+}
+
 export default function CareerPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [showTyping, setShowTyping] = useState(false)
+  const [insights, setInsights] = useState<Insight[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Proactive insights — computed server-side from the user's real data
+  useEffect(() => {
+    fetch('/api/coach-insights')
+      .then((r) => r.json())
+      .then((d) => setInsights(Array.isArray(d?.insights) ? d.insights : []))
+      .catch(() => { /* chips just don't render */ })
+  }, [])
 
   function scrollToBottom(smooth = true) {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
@@ -319,6 +334,40 @@ export default function CareerPage() {
             <p style={{ fontSize: '13px', color: 'var(--et-muted)', textAlign: 'center', marginBottom: 24, lineHeight: 1.5 }}>
               Resume, interviews, applications, work permits — ask anything.
             </p>
+
+            {/* Proactive insights — from the user's actual data */}
+            {insights.length > 0 && (
+              <div className="flex flex-col gap-2 w-full" style={{ marginBottom: 14 }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--et-placeholder)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  For you today
+                </p>
+                {insights.map((ins, i) => (
+                  <motion.button
+                    key={ins.type}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.04 * i, ease: [0.22, 1, 0.36, 1] }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => sendMessage(ins.prompt)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'linear-gradient(135deg, #EFF6FF, #F5F3FF)',
+                      border: '1px solid rgba(124,58,237,0.18)',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: 'var(--et-ink)',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      boxShadow: 'var(--shadow-xs)',
+                    }}
+                  >
+                    ✨ {ins.text}
+                  </motion.button>
+                ))}
+              </div>
+            )}
 
             {/* Suggested prompts */}
             <div className="flex flex-col gap-2 w-full">

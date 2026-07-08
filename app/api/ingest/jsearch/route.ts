@@ -94,37 +94,53 @@ export async function POST(req: NextRequest) {
     }, { status: 503 })
   }
 
+  // Re-bind to a plain `string` local — TS doesn't carry the null-check
+  // narrowing above into the nested fetchWorker() function declaration below.
+  const verifiedApiKey: string = apiKey
+
   const supabase = await createAdminClient()
   const rawResults: NormalizedJob[] = []
 
-  for (const q of QUERIES) {
-    try {
-      const results = await fetchJSearchPage(apiKey, q.text)
-      for (const r of results) {
-        if (!r.job_apply_link || !r.job_title || !r.employer_name) continue
-        // job_state is a full name ("Illinois"), not our two-letter format —
-        // use it only for the human-readable location string, never for `state`
-        const location = [r.job_city, r.job_state].filter(Boolean).join(', ')
+  // JSearch's own reported latency is ~10 seconds PER REQUEST (visible on its
+  // RapidAPI console) — 6 queries run sequentially would be ~60s on their own,
+  // before verification even starts, which is exactly what caused a
+  // FUNCTION_INVOCATION_TIMEOUT in production. Running them concurrently
+  // instead keeps total wall time close to one request's latency, not six.
+  const queue = [...QUERIES]
 
-        rawResults.push({
-          title: r.job_title,
-          company: r.employer_name,
-          location: location || q.state,
-          state: q.state,
-          apply_url: r.job_apply_link,
-          description: r.job_description ?? '',
-          posted_at: r.job_posted_at_datetime_utc,
-          job_type: r.job_employment_type,
-          salary_min: r.job_min_salary ?? undefined,
-          salary_max: r.job_max_salary ?? undefined,
-          isAggregator: true,
-        })
+  async function fetchWorker() {
+    while (queue.length > 0) {
+      const q = queue.shift()
+      if (!q) break
+      try {
+        const results = await fetchJSearchPage(verifiedApiKey, q.text)
+        for (const r of results) {
+          if (!r.job_apply_link || !r.job_title || !r.employer_name) continue
+          // job_state is a full name ("Illinois"), not our two-letter format —
+          // use it only for the human-readable location string, never for `state`
+          const location = [r.job_city, r.job_state].filter(Boolean).join(', ')
+
+          rawResults.push({
+            title: r.job_title,
+            company: r.employer_name,
+            location: location || q.state,
+            state: q.state,
+            apply_url: r.job_apply_link,
+            description: r.job_description ?? '',
+            posted_at: r.job_posted_at_datetime_utc,
+            job_type: r.job_employment_type,
+            salary_min: r.job_min_salary ?? undefined,
+            salary_max: r.job_max_salary ?? undefined,
+            isAggregator: true,
+          })
+        }
+      } catch {
+        // Skip failed queries — don't let one bad query kill the whole run
       }
-      await new Promise((res) => setTimeout(res, 300))
-    } catch {
-      // Skip failed queries — don't let one bad query kill the whole run
     }
   }
+
+  await Promise.all(Array.from({ length: 4 }, fetchWorker))
 
   const stats = await ingestNormalizedJobs(supabase, 'jsearch', rawResults)
 

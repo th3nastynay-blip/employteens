@@ -37,13 +37,15 @@ import { ingestNormalizedJobs, type NormalizedJob } from '@/lib/jobs/ingest-pipe
 export const maxDuration = 60
 
 // Keep this list short — each entry costs one request against JSearch's quota.
+// Rebalanced toward Hudson County (launch market): 4 of 6 queries target
+// Hudson cities directly, 2 keep NY presence. Same quota cost as before.
 const QUERIES = [
+  { text: 'part time cashier jobs in Jersey City, NJ', state: 'NJ' },
+  { text: 'crew member jobs in Jersey City, NJ', state: 'NJ' },
+  { text: 'part time jobs for high school students in Hoboken, NJ', state: 'NJ' },
+  { text: 'team member jobs in Bayonne, NJ', state: 'NJ' },
   { text: 'cashier jobs in New York, NY', state: 'NY' },
   { text: 'crew member jobs in New York, NY', state: 'NY' },
-  { text: 'part time retail associate jobs in Brooklyn, NY', state: 'NY' },
-  { text: 'team member jobs in Newark, NJ', state: 'NJ' },
-  { text: 'barista jobs in Jersey City, NJ', state: 'NJ' },
-  { text: 'entry level part time jobs in Queens, NY', state: 'NY' },
 ]
 
 interface JSearchResult {

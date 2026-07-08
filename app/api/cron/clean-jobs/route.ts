@@ -22,6 +22,15 @@ export const maxDuration = 60
 
 const MAX_AGE_DAYS = 14      // Deactivate jobs not verified in 14 days
 const BATCH_SIZE = 60         // Jobs to recheck per run — sized to fit the 60s budget above
+// SCALING NOTE: since the ingest pipeline's Pass-0 change, daily ingests no
+// longer refresh last_verified_at for known-active jobs — this route is the
+// SOLE owner of re-verification. At 60/day, a full cycle covers 60 × 14 =
+// 840 active jobs inside the MAX_AGE_DAYS window. Beyond that, healthy jobs
+// start expiring before their recheck turn comes up (they'll resurrect via
+// the ingest verify path, but with churn). When active count approaches
+// ~800, either raise BATCH_SIZE, run this workflow twice daily (edit
+// .github/workflows/clean-jobs-cron.yml — on GitHub's website, the repo
+// token lacks workflow scope), or raise MAX_AGE_DAYS.
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('Authorization')

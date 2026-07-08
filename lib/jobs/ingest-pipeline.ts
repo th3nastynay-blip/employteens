@@ -101,6 +101,35 @@ export async function ingestNormalizedJobs(
     return true
   })
 
+  // Pass 0: skip verification for URLs we ALREADY have rows for. Re-verifying
+  // known jobs on every daily ingest run burned most of the 60s budget on
+  // network fetches for jobs clean-jobs re-checks on its own cadence anyway —
+  // and that waste grows linearly with DB size, which is exactly the wrong
+  // scaling direction. Known URLs go straight to the update path.
+  // LIMITATION: this matches on the RAW url; Adzuna redirect links
+  // (adzuna.com/land/ad/...) are stored under their post-redirect final_url,
+  // so Adzuna jobs still re-verify daily until we persist a source_url column.
+  const knownIds: string[] = []
+  const knownUrls = new Set<string>()
+  const CHUNK = 200
+  const uniqueUrls = unique.map((j) => j.apply_url)
+  for (let i = 0; i < uniqueUrls.length; i += CHUNK) {
+    // Only ACTIVE rows are skippable. An inactive known URL falls through to
+    // verification — if it passes, the update path below resurrects it
+    // legitimately. Skipping inactive rows here would resurrect dead jobs
+    // without any check.
+    const { data: knownRows } = await supabase
+      .from('jobs')
+      .select('id, apply_url')
+      .eq('status', 'active')
+      .in('apply_url', uniqueUrls.slice(i, i + CHUNK))
+    for (const r of knownRows ?? []) {
+      knownIds.push(r.id)
+      knownUrls.add(r.apply_url)
+    }
+  }
+  const toVerify = unique.filter((j) => !knownUrls.has(j.apply_url))
+
   // Pass 1: cheap in-memory checks + URL verification. Verification doesn't
   // touch our own database, but for aggregator sources (Adzuna/JSearch) it
   // DOES mean a real network fetch of the destination page per job — direct-
@@ -111,7 +140,7 @@ export async function ingestNormalizedJobs(
   // before this was parallelized.
   const VERIFY_CONCURRENCY = 8
   const verifiedJobs: { raw: NormalizedJob; finalUrl: string; httpStatus: number | null }[] = []
-  const queue = [...unique]
+  const queue = [...toVerify]
 
   async function verifyWorker() {
     while (queue.length > 0) {
@@ -180,11 +209,13 @@ export async function ingestNormalizedJobs(
   // ever sent back to the client).
   const now = new Date().toISOString()
 
-  if (verifiedJobs.length > 0) {
-    const { data: existingRows } = await supabase
-      .from('jobs')
-      .select('id, apply_url')
-      .in('apply_url', verifiedJobs.map((v) => v.finalUrl))
+  if (verifiedJobs.length > 0 || knownIds.length > 0) {
+    const { data: existingRows } = verifiedJobs.length > 0
+      ? await supabase
+          .from('jobs')
+          .select('id, apply_url')
+          .in('apply_url', verifiedJobs.map((v) => v.finalUrl))
+      : { data: [] }
 
     const existingByUrl = new Map((existingRows ?? []).map((r) => [r.apply_url, r.id]))
 
@@ -260,8 +291,19 @@ export async function ingestNormalizedJobs(
           status: 'active',
         })
         .in('id', toUpdateIds)
-      stats.duplicate = toUpdateIds.length
     }
+
+    // Pass-0 known-active rows skipped verification, so they get ONLY a
+    // last_checked_at bump — no verified_at stamp, no status flip. Clean-jobs
+    // remains the sole owner of re-verification cadence for existing jobs.
+    if (knownIds.length > 0) {
+      await supabase
+        .from('jobs')
+        .update({ last_checked_at: now })
+        .in('id', knownIds)
+    }
+
+    stats.duplicate = toUpdateIds.length + knownIds.length
 
     // One batched INSERT for every genuinely new job. If a single row fails
     // a constraint, Postgres can reject the whole batch — falling back to

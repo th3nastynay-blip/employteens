@@ -46,6 +46,21 @@ const SEARCH_QUERIES = [
   { q: 'amusement park recreation attendant', where: 'New York', state: 'NY' },
   { q: 'movie theater usher concessions', where: 'New Jersey', state: 'NJ' },
   { q: 'grocery bagger', where: 'New Jersey', state: 'NJ' },
+  // Hudson County launch-market targeting. Adzuna's `where` accepts city
+  // names; these make the launch market dense instead of relying on
+  // state-wide queries to happen to return Hudson County results. Pass-0 in
+  // ingest-pipeline.ts (skip verification for known-active URLs) is what
+  // makes the larger query list affordable within the 60s budget.
+  { q: 'part time no experience', where: 'Jersey City', state: 'NJ' },
+  { q: 'cashier', where: 'Jersey City', state: 'NJ' },
+  { q: 'movie theater concessions usher', where: 'Jersey City', state: 'NJ' },
+  { q: 'part time team member', where: 'Hoboken', state: 'NJ' },
+  { q: 'ice cream shop server', where: 'Hoboken', state: 'NJ' },
+  { q: 'part time crew member', where: 'Bayonne', state: 'NJ' },
+  { q: 'part time cashier retail', where: 'Union City', state: 'NJ' },
+  { q: 'part time entry level', where: 'North Bergen', state: 'NJ' },
+  { q: 'part time retail associate', where: 'Secaucus', state: 'NJ' },
+  { q: 'camp counselor recreation', where: 'Jersey City', state: 'NJ' },
 ]
 
 // Company-specific searches for major teen employers

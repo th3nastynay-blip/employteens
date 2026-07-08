@@ -22,8 +22,11 @@ import { runLocalIngest } from '@/lib/jobs/local-ingest'
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
+  // Bearer OR ?secret= — same rotation caveat as admin/stats: remove
+  // query-param auth when CRON_SECRET is rotated.
   const auth = req.headers.get('Authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const qsSecret = req.nextUrl.searchParams.get('secret')
+  if (auth !== `Bearer ${process.env.CRON_SECRET}` && qsSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -44,8 +44,14 @@ interface PurgeDetails {
 }
 
 export async function GET(req: NextRequest) {
+  // Accepts Bearer header (crons, curl) OR ?secret= (browser-based ops —
+  // read-only endpoint, aggregate data only). NOTE: query-param auth means
+  // the secret lands in server/browser logs; acceptable only while
+  // CRON_SECRET rotation is already pending. Remove ?secret= support when
+  // the secret is rotated to something worth protecting.
   const auth = req.headers.get('Authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const qsSecret = req.nextUrl.searchParams.get('secret')
+  if (auth !== `Bearer ${process.env.CRON_SECRET}` && qsSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

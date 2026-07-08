@@ -1,0 +1,26 @@
+name: Daily job cleanup cron
+
+# Vercel's Hobby plan cron limit only had room for 4 of our 5 scheduled
+# routes — /api/cron/clean-jobs (dead/expired-listing cleanup) didn't get
+# registered. This workflow covers it for free using GitHub Actions' own
+# scheduler instead, completely independent of Vercel's cron system.
+#
+# Setup required (one-time): add a repository secret named CRON_SECRET with
+# the same value as the CRON_SECRET env var in Vercel.
+# GitHub repo -> Settings -> Secrets and variables -> Actions -> New repository secret
+
+on:
+  schedule:
+    # 2:00 AM UTC daily — same time this route was originally scheduled for in vercel.json
+    - cron: '0 2 * * *'
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab too
+
+jobs:
+  clean-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/clean-jobs
+        run: |
+          curl -X GET "https://employteensfinal.vercel.app/api/cron/clean-jobs" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --fail --max-time 90

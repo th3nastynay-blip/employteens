@@ -93,63 +93,76 @@ export async function ingestNormalizedJobs(
     return true
   })
 
-  // Pass 1: cheap in-memory checks + URL verification, per job (verification
-  // is unavoidably per-URL since each one is a distinct external resource —
-  // but it does NOT touch our own database, so it doesn't compound the way
-  // per-job DB round-trips do).
+  // Pass 1: cheap in-memory checks + URL verification. Verification doesn't
+  // touch our own database, but for aggregator sources (Adzuna/JSearch) it
+  // DOES mean a real network fetch of the destination page per job — direct-
+  // ATS sources skip that (see verify-url.ts Step 2). Run with limited
+  // concurrency instead of one-at-a-time: a source that returns 100+ raw
+  // results (Adzuna alone can) would otherwise blow past the 60s function
+  // limit doing sequential fetches, exactly what happened in production
+  // before this was parallelized.
+  const VERIFY_CONCURRENCY = 8
   const verifiedJobs: { raw: NormalizedJob; finalUrl: string; httpStatus: number | null }[] = []
+  const queue = [...unique]
 
-  for (const raw of unique) {
-    if (!raw.apply_url || !raw.title || !raw.company) {
-      stats.rejected_generic++
-      continue
+  async function verifyWorker() {
+    while (queue.length > 0) {
+      const raw = queue.shift()
+      if (!raw) break
+
+      if (!raw.apply_url || !raw.title || !raw.company) {
+        stats.rejected_generic++
+        continue
+      }
+
+      if (isGenericCareerPage(raw.apply_url)) {
+        stats.rejected_generic++
+        continue
+      }
+
+      const scamScore = detectScamRisk({
+        title: raw.title,
+        company: raw.company,
+        description: raw.description,
+        apply_url: raw.apply_url,
+      })
+
+      if (scamScore >= SCAM_THRESHOLD) {
+        stats.rejected_scam++
+        continue
+      }
+
+      const verification = await verifyJobUrl(
+        raw.apply_url,
+        7000,
+        raw.isAggregator ? { title: raw.title, location: raw.location } : undefined,
+      )
+
+      if (verification.status === 'mismatch') {
+        stats.rejected_mismatch++
+        continue
+      }
+
+      if (verification.status === 'no_apply_mechanism') {
+        stats.rejected_no_apply++
+        continue
+      }
+
+      if (!verification.is_active) {
+        stats.rejected_url++
+        continue
+      }
+
+      stats.verified++
+      verifiedJobs.push({
+        raw,
+        finalUrl: verification.final_url ?? raw.apply_url,
+        httpStatus: verification.http_status,
+      })
     }
-
-    if (isGenericCareerPage(raw.apply_url)) {
-      stats.rejected_generic++
-      continue
-    }
-
-    const scamScore = detectScamRisk({
-      title: raw.title,
-      company: raw.company,
-      description: raw.description,
-      apply_url: raw.apply_url,
-    })
-
-    if (scamScore >= SCAM_THRESHOLD) {
-      stats.rejected_scam++
-      continue
-    }
-
-    const verification = await verifyJobUrl(
-      raw.apply_url,
-      7000,
-      raw.isAggregator ? { title: raw.title, location: raw.location } : undefined,
-    )
-
-    if (verification.status === 'mismatch') {
-      stats.rejected_mismatch++
-      continue
-    }
-
-    if (verification.status === 'no_apply_mechanism') {
-      stats.rejected_no_apply++
-      continue
-    }
-
-    if (!verification.is_active) {
-      stats.rejected_url++
-      continue
-    }
-
-    stats.verified++
-    verifiedJobs.push({
-      raw,
-      finalUrl: verification.final_url ?? raw.apply_url,
-      httpStatus: verification.http_status,
-    })
   }
+
+  await Promise.all(Array.from({ length: VERIFY_CONCURRENCY }, verifyWorker))
 
   // Pass 2: ONE batched lookup instead of one SELECT per job — this was the
   // actual bottleneck once real sources started returning real volume (a

@@ -17,8 +17,9 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { ingestNormalizedJobs, type NormalizedJob } from '@/lib/jobs/ingest-pipeline'
 
 // Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
-// This loop does 16 sequential API calls plus per-job verification, so it
-// needs the extra room even on a free plan.
+// This does 26 Adzuna queries (concurrency-limited, see below) plus per-job
+// verification (also concurrency-limited in ingest-pipeline.ts), so it needs
+// the extra room even on a free plan.
 export const maxDuration = 60
 
 // Teen-friendly search queries for NY/NJ
@@ -105,54 +106,58 @@ export async function POST(req: NextRequest) {
     }, { status: 503 })
   }
 
+  // Re-bind to plain `string` locals — TS doesn't carry the null-check
+  // narrowing above into the nested fetchWorker() function declaration below.
+  const verifiedAppId: string = appId
+  const verifiedAppKey: string = appKey
+
   const supabase = await createAdminClient()
 
-  // Collect raw results from all queries
+  // 26 total queries (10 keyword + 16 company). Run with limited concurrency
+  // instead of one at a time with a delay after each — sequential took long
+  // enough on its own (before verification even started) to contribute to a
+  // production FUNCTION_INVOCATION_TIMEOUT. Concurrency of 4 cuts total wall
+  // time roughly 4x while still being reasonably polite to Adzuna's API.
+  type QuerySpec = { q: string; where: string; state: string }
+  const allQueries: QuerySpec[] = [
+    ...SEARCH_QUERIES,
+    ...COMPANY_SEARCHES.map((c) => ({
+      q: c.company,
+      where: c.state === 'NY' ? 'New York' : 'New Jersey',
+      state: c.state,
+    })),
+  ]
+
   const rawResults: NormalizedJob[] = []
+  const queue = [...allQueries]
 
-  for (const q of SEARCH_QUERIES) {
-    try {
-      const results = await fetchAdzunaPage(appId, appKey, q.q, q.where)
-      for (const r of results) {
-        if (!r.redirect_url) continue
-        rawResults.push({
-          title: r.title,
-          company: r.company?.display_name ?? 'Unknown',
-          location: r.location?.display_name ?? q.where,
-          apply_url: r.redirect_url,
-          description: r.description ?? '',
-          posted_at: r.created,
-          state: q.state,
-          isAggregator: true,
-        })
+  async function fetchWorker() {
+    while (queue.length > 0) {
+      const q = queue.shift()
+      if (!q) break
+      try {
+        const results = await fetchAdzunaPage(verifiedAppId, verifiedAppKey, q.q, q.where)
+        for (const r of results) {
+          if (!r.redirect_url) continue
+          rawResults.push({
+            title: r.title,
+            company: r.company?.display_name ?? q.q,
+            location: r.location?.display_name ?? q.where,
+            apply_url: r.redirect_url,
+            description: r.description ?? '',
+            posted_at: r.created,
+            state: q.state,
+            isAggregator: true,
+          })
+        }
+      } catch {
+        // Skip failed queries — don't let one bad query kill the whole run
       }
-      await new Promise((res) => setTimeout(res, 300))
-    } catch {
-      // Skip failed queries
+      await new Promise((res) => setTimeout(res, 150))
     }
   }
 
-  for (const q of COMPANY_SEARCHES) {
-    try {
-      const results = await fetchAdzunaPage(appId, appKey, q.company, q.state === 'NY' ? 'New York' : 'New Jersey')
-      for (const r of results) {
-        if (!r.redirect_url) continue
-        rawResults.push({
-          title: r.title,
-          company: r.company?.display_name ?? q.company,
-          location: r.location?.display_name ?? q.state,
-          apply_url: r.redirect_url,
-          description: r.description ?? '',
-          posted_at: r.created,
-          state: q.state,
-          isAggregator: true,
-        })
-      }
-      await new Promise((res) => setTimeout(res, 300))
-    } catch {
-      // Skip
-    }
-  }
+  await Promise.all(Array.from({ length: 4 }, fetchWorker))
 
   const stats = await ingestNormalizedJobs(supabase, 'adzuna', rawResults)
 

@@ -1,13 +1,35 @@
 /**
- * EMPLOYTEENS — AI Match Engine v2
- * Scores jobs 0-100 using weighted multi-signal scoring.
+ * EMPLOYTEENS — AI Match Engine v3
  *
- * Weights:
- *   Age eligibility    30%  (hard block if under min_age)
- *   Schedule overlap   25%
- *   Location/commute   20%
- *   Interest alignment 15%  (weighted by user-set priority)
- *   Experience match   10%
+ * Design changes from v2, and why:
+ *
+ * 1. AGE IS A FILTER, NOT A SCORE. v2 gave age 30% of the weight, but after
+ *    the hard under-age block, every remaining job scored 100 on age — a
+ *    constant 30 points for everyone, zero differentiation. That weight now
+ *    goes to signals that actually separate good matches from mediocre ones.
+ *
+ * 2. REAL DISTANCES FOR THE LAUNCH MARKET. v2 estimated distance from ZIP
+ *    prefix similarity ("same 3-digit prefix ≈ 2 miles"), which is nearly
+ *    random inside Hudson County — 073xx covers Jersey City to Kearny.
+ *    v3 carries lat/lng centroids for every Hudson County ZIP plus nearby
+ *    NYC/Newark, and computes haversine miles. Unknown ZIPs fall back to
+ *    the old prefix heuristic.
+ *
+ * 3. EMPLOYER QUALITY AND HIRING URGENCY ARE SCORED. v2 mentioned them in
+ *    reason text but they never moved the number. Trust is the product —
+ *    a teen-friendly, fast-hiring employer should outrank a generic one.
+ *
+ * 4. EVERY SCORE IS EXPLAINABLE. MatchResult now includes score_breakdown
+ *    (per-signal 0–100 values plus the weights) so the UI and the AI Coach
+ *    can show exactly why a job scored what it scored.
+ *
+ * Weights (age-eligible jobs only; under-age is a hard block):
+ *   Schedule overlap    25%
+ *   Location/commute    25%
+ *   Interest alignment  15%
+ *   Employer quality    15%   (teen-friendliness, scam-risk inverse)
+ *   Hiring urgency      10%   (hiring speed, posting recency)
+ *   Experience match    10%
  */
 
 import type { UserProfile, JobRow, JobMatch } from '@/lib/types/database'
@@ -28,29 +50,65 @@ const TRANSPORT_RANGE: Record<Transportation, number> = {
   parent_dropoff: 20.0,
 }
 
+// ── ZIP centroids: Hudson County launch market + adjacent NYC/Newark ──
+// Approximate lat/lng per ZIP. Coverage is deliberately launch-market-deep
+// rather than nationwide-shallow; everything else uses the prefix fallback.
+const ZIP_CENTROIDS: Record<string, [number, number]> = {
+  // Jersey City
+  '07302': [40.719, -74.046], '07304': [40.716, -74.072], '07305': [40.697, -74.083],
+  '07306': [40.734, -74.071], '07307': [40.750, -74.057], '07310': [40.730, -74.036],
+  '07311': [40.719, -74.033],
+  // Hoboken / Bayonne / Union City / West New York + Guttenberg
+  '07030': [40.745, -74.032], '07002': [40.666, -74.116], '07087': [40.767, -74.032],
+  '07093': [40.788, -74.011],
+  // North Bergen / Secaucus / Kearny / Weehawken / Harrison + East Newark
+  '07047': [40.794, -74.024], '07094': [40.791, -74.061], '07032': [40.768, -74.145],
+  '07086': [40.767, -74.020], '07029': [40.743, -74.153],
+  // Adjacent markets teens actually commute to
+  '07102': [40.735, -74.172], '07103': [40.738, -74.195], '07104': [40.767, -74.169],
+  '07105': [40.723, -74.138], // Newark (Ironbound reachable via PATH from Harrison)
+  '10001': [40.750, -73.997], '10003': [40.731, -73.989], '10011': [40.742, -74.000],
+  '10014': [40.734, -74.006], '10280': [40.708, -74.017], '10282': [40.717, -74.015],
+  '11201': [40.694, -73.990],
+}
+
+function haversineMiles(a: [number, number], b: [number, number]): number {
+  const R = 3958.8
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180
+  const lat1 = (a[0] * Math.PI) / 180
+  const lat2 = (b[0] * Math.PI) / 180
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+/** Distance in miles between two ZIPs; null when we can't estimate honestly. */
+export function zipDistanceMiles(zipA: string, zipB: string): number | null {
+  if (!zipA || !zipB) return null
+  if (zipA === zipB) return 0.5 // same ZIP ≈ sub-mile
+  const a = ZIP_CENTROIDS[zipA]
+  const b = ZIP_CENTROIDS[zipB]
+  if (a && b) return haversineMiles(a, b)
+  return null
+}
+
 // ── Interest → job keyword map ────────────────────────────────────────
 const INTEREST_KEYWORDS: Record<string, string[]> = {
-  'Food & Restaurants':    ['restaurant', 'food', 'pizza', 'chipotle', 'mcdonald', 'starbucks', 'barista', 'crew', 'kitchen', 'cook', 'dunkin', 'panera', 'chick-fil-a', 'burger'],
+  'Food & Restaurants':    ['restaurant', 'food', 'pizza', 'chipotle', 'mcdonald', 'starbucks', 'barista', 'crew', 'kitchen', 'cook', 'dunkin', 'panera', 'chick-fil-a', 'burger', 'ice cream'],
   'Retail & Shopping':     ['retail', 'store', 'cashier', 'sales associate', 'target', 'walmart', 'mall', 'clothing', 'old navy', 'gap', 'h&m'],
   'Sports & Fitness':      ['gym', 'fitness', 'planet fitness', 'equinox', 'crunch', 'lifeguard', 'pool', 'sport', 'recreation'],
-  'Entertainment & Movies':['amc', 'regal', 'theater', 'movie', 'entertainment', 'cinema', 'arcade', 'bowling'],
+  'Entertainment & Movies':['amc', 'regal', 'theater', 'theatre', 'movie', 'entertainment', 'cinema', 'arcade', 'bowling'],
   'Technology':            ['tech', 'computer', 'software', 'it support', 'help desk', 'developer', 'coding'],
   'Healthcare & Childcare':['childcare', 'babysit', 'camp', 'tutor', 'aide', 'hospital', 'pharmacy', 'cvs', 'walgreens'],
   'Arts & Music':          ['art', 'music', 'design', 'creative', 'photography', 'print', 'craft'],
   'Outdoors & Nature':     ['outdoor', 'landscape', 'park', 'garden', 'nature', 'camp', 'trail'],
   'Customer Service':      ['customer service', 'front desk', 'host', 'receptionist', 'call center', 'support'],
   'Delivery & Logistics':  ['delivery', 'driver', 'logistics', 'package', 'warehouse', 'amazon', 'ups', 'fedex'],
-  'Tutoring & Education':  ['tutor', 'teacher', 'camp counselor', 'education', 'learning', 'library', 'school'],
+  'Tutoring & Education':  ['tutor', 'teacher', 'camp counselor', 'education', 'learning', 'library', 'school', 'youth'],
   'Office & Admin':        ['office', 'admin', 'clerk', 'data entry', 'receptionist', 'filing', 'assistant'],
 }
 
-// ── Scoring functions ─────────────────────────────────────────────────
-
-function scoreAge(userAge: number | null, job: JobRow): number {
-  if (!userAge) return 50
-  if (userAge < job.min_age) return 0     // hard block
-  return 100
-}
+// ── Scoring functions (each returns 0–100) ────────────────────────────
 
 function scoreSchedule(user: UserProfile, job: JobRow): number {
   const availability = user.availability as Record<string, boolean>
@@ -70,60 +128,55 @@ function scoreSchedule(user: UserProfile, job: JobRow): number {
   return score
 }
 
-function scoreLocation(user: UserProfile, job: JobRow, transports: Transportation[]): number {
-  if (user.zip_code === job.zip_code) return 100
+function scoreLocation(
+  user: UserProfile,
+  job: JobRow,
+  transports: Transportation[],
+): { score: number; miles: number | null } {
+  const miles = zipDistanceMiles(user.zip_code, job.zip_code)
+  const maxRange = transports.length > 0
+    ? Math.max(...transports.map((t) => TRANSPORT_RANGE[t] ?? 0))
+    : 5 // no transport info — assume a modest default range
 
-  // Estimate distance from ZIP prefix similarity
-  const userPfx = user.zip_code.slice(0, 3)
-  const jobPfx = job.zip_code.slice(0, 3)
-  const samePrefix = userPfx === jobPfx
-  const sameState = user.state === job.state
-
-  // Rough estimated miles based on ZIP proximity
-  const estimatedMiles = samePrefix ? 2 : sameState ? 6 : 12
-
-  if (transports.length === 0) {
-    // No transport info — use job's commute estimate
-    return Math.max(0, 100 - job.commute_estimate)
+  if (miles !== null) {
+    if (miles <= maxRange * 0.4) return { score: 100, miles }
+    if (miles <= maxRange * 0.75) return { score: 90, miles }
+    if (miles <= maxRange) return { score: 78, miles }
+    if (miles <= maxRange * 1.5) return { score: 55, miles }
+    return { score: 30, miles }
   }
 
-  // Check if ANY transport mode can reach this job
-  const maxRange = Math.max(...transports.map((t) => TRANSPORT_RANGE[t] ?? 0))
-
-  if (estimatedMiles <= maxRange * 0.5) return 100
-  if (estimatedMiles <= maxRange) return 85
-  if (estimatedMiles <= maxRange * 1.5) return 60   // reachable but effort
-  return 35
+  // Fallback: ZIP prefix heuristic (outside centroid coverage)
+  const samePrefix = user.zip_code.slice(0, 3) === job.zip_code.slice(0, 3)
+  const sameState = user.state === job.state
+  const estimatedMiles = samePrefix ? 2 : sameState ? 6 : 12
+  if (estimatedMiles <= maxRange * 0.5) return { score: 95, miles: null }
+  if (estimatedMiles <= maxRange) return { score: 80, miles: null }
+  if (estimatedMiles <= maxRange * 1.5) return { score: 55, miles: null }
+  return { score: 35, miles: null }
 }
 
 function scoreInterests(user: UserProfile, job: JobRow): number {
-  const rawInterests = user.interests
-  const weighted: WeightedInterest[] = deserializeInterests(rawInterests)
-
+  const weighted: WeightedInterest[] = deserializeInterests(user.interests)
   if (weighted.length === 0) return 60
 
   const title = job.title.toLowerCase()
   const company = job.company.toLowerCase()
 
-  // Weighted sum: weight × match (1 if matched, 0 if not)
   let totalWeight = 0
   let matchedWeight = 0
-
   for (const { name, weight } of weighted) {
     totalWeight += weight
     const keywords = INTEREST_KEYWORDS[name] ?? []
-    const matched = keywords.some((kw) => title.includes(kw) || company.includes(kw))
-    if (matched) matchedWeight += weight
+    if (keywords.some((kw) => title.includes(kw) || company.includes(kw))) {
+      matchedWeight += weight
+    }
   }
-
-  const ratio = matchedWeight / totalWeight
-  return Math.round(50 + ratio * 50)
+  return Math.round(50 + (matchedWeight / totalWeight) * 50)
 }
 
 function scoreExperience(user: UserProfile, job: JobRow): number {
-  // experience stored in interests/skills — check the experience field
   const exp = (user as UserProfile & { experience?: string }).experience ?? 'none'
-
   if (job.experience_required === 'none') return 100
   if (job.experience_required === 'preferred') return exp === 'none' ? 75 : 95
   if (job.experience_required === '1_year') {
@@ -134,58 +187,91 @@ function scoreExperience(user: UserProfile, job: JobRow): number {
   return 70
 }
 
+/**
+ * Employer quality: teen-friendliness blended with scam-risk inverse.
+ * Trust is the product — a verified, teen-friendly employer should outrank
+ * an equally-close generic one, and anything with scam signals should sink.
+ */
+function scoreEmployerQuality(job: JobRow): number {
+  const scamInverse = 100 - job.scam_risk_score
+  return Math.round(job.teen_friendly_score * 0.7 + scamInverse * 0.3)
+}
+
+/** Hiring urgency: employer hiring speed blended with posting recency. */
+function scoreUrgency(job: JobRow): number {
+  let recency = 40
+  if (job.posted_at) {
+    const days = (Date.now() - new Date(job.posted_at).getTime()) / 86_400_000
+    if (days <= 3) recency = 100
+    else if (days <= 7) recency = 80
+    else if (days <= 14) recency = 60
+  }
+  return Math.round(job.hiring_speed_score * 0.7 + recency * 0.3)
+}
+
 // ── Structured explanation ────────────────────────────────────────────
 export interface MatchReason {
   text: string
   positive: boolean
 }
 
+export interface ScoreBreakdown {
+  schedule: number
+  location: number
+  interest: number
+  employer_quality: number
+  urgency: number
+  experience: number
+  weights: Record<string, number>
+  distance_miles: number | null
+}
+
+const WEIGHTS = {
+  schedule: 0.25,
+  location: 0.25,
+  interest: 0.15,
+  employer_quality: 0.15,
+  urgency: 0.10,
+  experience: 0.10,
+} as const
+
 function buildReasons(
   user: UserProfile,
   job: JobRow,
-  scores: Record<string, number>,
+  scores: Omit<ScoreBreakdown, 'weights'>,
   transports: Transportation[],
 ): MatchReason[] {
   const reasons: MatchReason[] = []
 
-  // Schedule
-  if (scores.schedule >= 80) {
-    reasons.push({ text: `Works with your ${user.school_end_time} school schedule`, positive: true })
-  }
-
-  // Age
-  if (user.age && user.age >= job.min_age) {
-    if (job.min_age <= 15) {
-      reasons.push({ text: `Hires at age ${job.min_age} — you qualify`, positive: true })
-    } else {
-      reasons.push({ text: 'Age requirement met', positive: true })
-    }
-  }
-
-  // Transport
-  if (transports.length > 0 && scores.location >= 80) {
-    const primary = transports[0]
+  // Distance — the most concrete, trust-building fact we can state
+  if (scores.distance_miles !== null && scores.distance_miles <= 3) {
+    const d = scores.distance_miles
+    reasons.push({
+      text: d < 1 ? 'Less than a mile from you' : `About ${d.toFixed(1)} miles from you`,
+      positive: true,
+    })
+  } else if (transports.length > 0 && scores.location >= 80) {
     const labels: Record<Transportation, string> = {
       walking: 'walking distance',
       bike: 'bikeable',
       public_transit: 'reachable by transit',
-      car: 'easy drive',
-      parent_dropoff: 'easy drop-off',
-      rideshare: 'short ride',
+      car: 'an easy drive',
+      parent_dropoff: 'an easy drop-off',
+      rideshare: 'a short ride',
     }
-    reasons.push({ text: `Within ${labels[primary] ?? 'reach'} from you`, positive: true })
+    reasons.push({ text: `Within ${labels[transports[0]] ?? 'reach'} from you`, positive: true })
   } else if (scores.location < 50) {
     reasons.push({ text: 'Farther than your usual range', positive: false })
   }
 
-  // Experience
-  if (job.experience_required === 'none') {
-    reasons.push({ text: 'No experience required', positive: true })
+  // Schedule
+  if (scores.schedule >= 80) {
+    reasons.push({ text: `Works with your ${user.school_end_time ?? 'school'} schedule`, positive: true })
   }
 
-  // Hiring speed
-  if (job.hiring_speed_score >= 85) {
-    reasons.push({ text: 'Known to hire within days', positive: true })
+  // Younger-teen eligibility is worth calling out — it's rare and valuable
+  if (user.age && job.min_age <= 15 && user.age <= 16) {
+    reasons.push({ text: `Hires at age ${job.min_age} — you qualify`, positive: true })
   }
 
   // Interest match
@@ -196,17 +282,37 @@ function buildReasons(
     const matched = weighted.find(({ name }) =>
       (INTEREST_KEYWORDS[name] ?? []).some((kw) => title.includes(kw) || company.includes(kw))
     )
-    if (matched) {
-      reasons.push({ text: `Matches your ${matched.name} interest`, positive: true })
-    }
+    if (matched) reasons.push({ text: `Matches your ${matched.name} interest`, positive: true })
   }
 
-  // Teen friendly
-  if (job.teen_friendly_score >= 85) {
-    reasons.push({ text: 'Highly teen-friendly employer', positive: true })
+  // Urgency
+  if (scores.urgency >= 85) {
+    reasons.push({ text: 'Hiring fast — apply soon', positive: true })
+  } else if (job.posted_at && (Date.now() - new Date(job.posted_at).getTime()) / 86_400_000 <= 3) {
+    reasons.push({ text: 'Posted in the last few days', positive: true })
   }
 
-  return reasons.slice(0, 5)  // cap at 5 reasons
+  // Employer quality
+  if (job.teen_friendly_score >= 90) {
+    reasons.push({ text: 'Top-rated employer for teens', positive: true })
+  } else if (job.teen_friendly_score >= 85) {
+    reasons.push({ text: 'Teen-friendly employer', positive: true })
+  }
+
+  // Experience
+  if (job.experience_required === 'none') {
+    reasons.push({ text: 'No experience required', positive: true })
+  }
+
+  // Pathway framing for volunteer/program entries
+  if (job.job_type === 'volunteer') {
+    reasons.push({ text: 'Builds work history for future paid roles', positive: true })
+  }
+  if (job.job_type === 'seasonal') {
+    reasons.push({ text: 'Seasonal — apply within the window', positive: true })
+  }
+
+  return reasons.slice(0, 5)
 }
 
 function shortExplanation(reasons: MatchReason[]): string {
@@ -232,39 +338,49 @@ export interface MatchResult {
   match_score: number
   match_explanation: string
   match_reasons: MatchReason[]
+  score_breakdown: ScoreBreakdown
   feed_section: 'best_matches' | 'new_near_you' | 'high_probability'
 }
 
 export function computeMatchScore(user: UserProfile, job: JobRow): MatchResult {
-  // Parse multi-select transportation
   const transports = deserializeTransportation(
     typeof user.transportation === 'string' ? user.transportation : JSON.stringify(user.transportation)
   )
 
-  // Hard block on age
+  const emptyBreakdown: ScoreBreakdown = {
+    schedule: 0, location: 0, interest: 0, employer_quality: 0, urgency: 0,
+    experience: 0, weights: { ...WEIGHTS }, distance_miles: null,
+  }
+
+  // Hard block on age — a filter, not a scored signal
   if (user.age && user.age < job.min_age) {
     return {
       match_score: 0,
       match_explanation: 'Age requirement not met.',
       match_reasons: [{ text: `Requires age ${job.min_age}+`, positive: false }],
+      score_breakdown: emptyBreakdown,
       feed_section: 'best_matches',
     }
   }
 
+  const loc = scoreLocation(user, job, transports)
   const scores = {
-    age:      scoreAge(user.age, job),
     schedule: scoreSchedule(user, job),
-    location: scoreLocation(user, job, transports),
+    location: loc.score,
     interest: scoreInterests(user, job),
+    employer_quality: scoreEmployerQuality(job),
+    urgency: scoreUrgency(job),
     experience: scoreExperience(user, job),
+    distance_miles: loc.miles,
   }
 
   const weighted =
-    scores.age        * 0.30 +
-    scores.schedule   * 0.25 +
-    scores.location   * 0.20 +
-    scores.interest   * 0.15 +
-    scores.experience * 0.10
+    scores.schedule         * WEIGHTS.schedule +
+    scores.location         * WEIGHTS.location +
+    scores.interest         * WEIGHTS.interest +
+    scores.employer_quality * WEIGHTS.employer_quality +
+    scores.urgency          * WEIGHTS.urgency +
+    scores.experience       * WEIGHTS.experience
 
   const match_score = Math.round(Math.min(100, Math.max(0, weighted)))
   const reasons = buildReasons(user, job, scores, transports)
@@ -273,6 +389,7 @@ export function computeMatchScore(user: UserProfile, job: JobRow): MatchResult {
     match_score,
     match_explanation: shortExplanation(reasons),
     match_reasons: reasons,
+    score_breakdown: { ...scores, weights: { ...WEIGHTS } },
     feed_section: determineFeedSection(match_score, job, scores.location),
   }
 }
@@ -298,6 +415,13 @@ export function classifyFeedSections(matches: JobMatch[]) {
 
 // ── No-match explanation ──────────────────────────────────────────────
 export function getNoMatchExplanation(user: UserProfile, section: string): string {
+  // Honest messaging for younger teens: supply for 14–15 is structurally
+  // thin (most employers and even municipal programs floor at 15–16), so
+  // say that instead of a generic "check back tomorrow".
+  if (user.age && user.age <= 15 && section === 'best_matches') {
+    return `Jobs that hire at ${user.age} are genuinely rare — most employers start at 16. We surface every verified one we find, including library programs and city youth employment (many open each spring). Save your profile and we'll match you the moment one appears.`
+  }
+
   const weighted = deserializeInterests(user.interests)
   const topInterest = weighted.sort((a, b) => b.weight - a.weight)[0]
 

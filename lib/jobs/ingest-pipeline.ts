@@ -62,7 +62,12 @@ export interface IngestStats {
   inserted: number
   updated: number
   duplicate: number
+  /** First few rejection/insert-failure details — enough to diagnose a bad run from the response alone */
+  rejections?: { url: string; status: string; reason: string }[]
+  insert_errors?: string[]
 }
+
+const MAX_DIAGNOSTICS = 10
 
 const SCAM_THRESHOLD = 70
 
@@ -91,6 +96,14 @@ export async function ingestNormalizedJobs(
     inserted: 0,
     updated: 0,
     duplicate: 0,
+    rejections: [],
+    insert_errors: [],
+  }
+
+  function noteRejection(url: string, status: string, reason: string) {
+    if ((stats.rejections?.length ?? 0) < MAX_DIAGNOSTICS) {
+      stats.rejections?.push({ url, status, reason })
+    }
   }
 
   // Dedup within this batch before any network call
@@ -178,16 +191,19 @@ export async function ingestNormalizedJobs(
 
       if (verification.status === 'mismatch') {
         stats.rejected_mismatch++
+        noteRejection(raw.apply_url, verification.status, verification.reason)
         continue
       }
 
       if (verification.status === 'no_apply_mechanism') {
         stats.rejected_no_apply++
+        noteRejection(raw.apply_url, verification.status, verification.reason)
         continue
       }
 
       if (!verification.is_active) {
         stats.rejected_url++
+        noteRejection(raw.apply_url, verification.status, `HTTP ${verification.http_status ?? '—'}: ${verification.reason}`)
         continue
       }
 
@@ -260,8 +276,10 @@ export async function ingestNormalizedJobs(
         commute_estimate: 30,
         physical_demand_level: 50,
         customer_interaction_level: 70,
-        salary_min: v.raw.salary_min,
-        salary_max: v.raw.salary_max,
+        // Column is INTEGER — a fractional hourly rate (e.g. 15.23) would
+        // fail the whole batch insert with a type error.
+        salary_min: v.raw.salary_min != null ? Math.round(v.raw.salary_min) : undefined,
+        salary_max: v.raw.salary_max != null ? Math.round(v.raw.salary_max) : undefined,
         job_type: v.raw.job_type,
         status: 'active',
         verified_at: now,
@@ -316,10 +334,14 @@ export async function ingestNormalizedJobs(
         stats.inserted = toInsert.length
       } else {
         console.log(`[ingest-pipeline/${source}] batch insert of ${toInsert.length} rows failed, falling back to per-row:`, error.message)
+        if ((stats.insert_errors?.length ?? 0) < MAX_DIAGNOSTICS) stats.insert_errors?.push(`batch: ${error.message}`)
         for (const row of toInsert) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { error: rowError } = await supabase.from('jobs').insert(row as any)
           if (!rowError) stats.inserted++
+          else if ((stats.insert_errors?.length ?? 0) < MAX_DIAGNOSTICS) {
+            stats.insert_errors?.push(`${String(row.apply_url).slice(0, 60)}: ${rowError.message}`)
+          }
         }
       }
     }

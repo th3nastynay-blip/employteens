@@ -258,12 +258,21 @@ export async function verifyJobUrl(
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
+    // Program pages (municipal sites, AMC careers) often sit behind bot
+    // protection that 403s anything with a bot-looking UA — a browser-like
+    // UA lets the legitimacy check actually run. Aggregator links keep the
+    // honest verifier UA.
+    const userAgent = opts?.programPage
+      ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+      : 'Mozilla/5.0 (compatible; EmployTeens-Verifier/1.0)'
+
     const res = await fetch(url, {
       method: 'GET',
       signal: controller.signal,
       redirect: 'follow',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; EmployTeens-Verifier/1.0)',
+        'User-Agent': userAgent,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
     })
 

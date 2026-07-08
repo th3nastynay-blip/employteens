@@ -93,6 +93,12 @@ export async function ingestNormalizedJobs(
     return true
   })
 
+  // Pass 1: cheap in-memory checks + URL verification, per job (verification
+  // is unavoidably per-URL since each one is a distinct external resource —
+  // but it does NOT touch our own database, so it doesn't compound the way
+  // per-job DB round-trips do).
+  const verifiedJobs: { raw: NormalizedJob; finalUrl: string; httpStatus: number | null }[] = []
+
   for (const raw of unique) {
     if (!raw.apply_url || !raw.title || !raw.company) {
       stats.rejected_generic++
@@ -138,71 +144,121 @@ export async function ingestNormalizedJobs(
     }
 
     stats.verified++
-    const now = new Date().toISOString()
+    verifiedJobs.push({
+      raw,
+      finalUrl: verification.final_url ?? raw.apply_url,
+      httpStatus: verification.http_status,
+    })
+  }
 
-    const { data: existing } = await supabase
+  // Pass 2: ONE batched lookup instead of one SELECT per job — this was the
+  // actual bottleneck once real sources started returning real volume (a
+  // national chain's job board can easily return 50+ matches; at one DB
+  // round-trip per job that blew past the 60s function limit with zero bytes
+  // ever sent back to the client).
+  const now = new Date().toISOString()
+
+  if (verifiedJobs.length > 0) {
+    const { data: existingRows } = await supabase
       .from('jobs')
-      .select('id')
-      .eq('apply_url', raw.apply_url)
-      .maybeSingle()
+      .select('id, apply_url')
+      .in('apply_url', verifiedJobs.map((v) => v.finalUrl))
 
-    if (existing) {
+    const existingByUrl = new Map((existingRows ?? []).map((r) => [r.apply_url, r.id]))
+
+    const toUpdateIds: string[] = []
+    const toInsert: Record<string, unknown>[] = []
+
+    for (const v of verifiedJobs) {
+      const existingId = existingByUrl.get(v.finalUrl)
+      if (existingId) {
+        toUpdateIds.push(existingId)
+        continue
+      }
+
+      const profile = getCompanyProfile(v.raw.company)
+      const teenScore = scoreTeenFriendliness({
+        title: v.raw.title,
+        company: v.raw.company,
+        description: v.raw.description,
+      })
+      const scamScore = detectScamRisk({
+        title: v.raw.title,
+        company: v.raw.company,
+        description: v.raw.description,
+        apply_url: v.raw.apply_url,
+      })
+
+      toInsert.push({
+        title: v.raw.title,
+        company: v.raw.company,
+        location: v.raw.location,
+        state: inferState(v.raw.location, v.raw.state),
+        zip_code: v.raw.zip_code ?? '00000',
+        apply_url: v.finalUrl,
+        source,
+        min_age: v.raw.min_age ?? profile.min_age,
+        description: v.raw.description?.slice(0, 800) ?? '',
+        experience_required: 'none',
+        teen_friendly_score: teenScore,
+        schedule_flexibility_score: 78,
+        hiring_speed_score: profile.hiring_speed_score,
+        scam_risk_score: scamScore,
+        commute_estimate: 30,
+        physical_demand_level: 50,
+        customer_interaction_level: 70,
+        salary_min: v.raw.salary_min,
+        salary_max: v.raw.salary_max,
+        job_type: v.raw.job_type,
+        status: 'active',
+        verified_at: now,
+        last_checked_at: now,
+        http_status: v.httpStatus,
+        is_active: true,
+        verification_status: 'verified',
+        posted_at: v.raw.posted_at ?? now,
+        last_verified_at: now,
+        embedding: null,
+      })
+    }
+
+    // One batched UPDATE for every job that already existed. Note: this
+    // doesn't refresh each row's individual http_status (they'd each need a
+    // different value) — that's a minor diagnostic-field tradeoff in exchange
+    // for turning what used to be N sequential round-trips into 1.
+    if (toUpdateIds.length > 0) {
       await supabase
         .from('jobs')
         .update({
           last_checked_at: now,
-          http_status: verification.http_status,
           is_active: true,
           verification_status: 'verified',
           verified_at: now,
           last_verified_at: now,
           status: 'active',
         })
-        .eq('id', existing.id)
-      stats.duplicate++
-      continue
+        .in('id', toUpdateIds)
+      stats.duplicate = toUpdateIds.length
     }
 
-    const profile = getCompanyProfile(raw.company)
-    const teenScore = scoreTeenFriendliness({
-      title: raw.title,
-      company: raw.company,
-      description: raw.description,
-    })
-
-    const { error } = await supabase.from('jobs').insert({
-      title: raw.title,
-      company: raw.company,
-      location: raw.location,
-      state: inferState(raw.location, raw.state),
-      zip_code: raw.zip_code ?? '00000',
-      apply_url: verification.final_url ?? raw.apply_url,
-      source,
-      min_age: raw.min_age ?? profile.min_age,
-      description: raw.description?.slice(0, 800) ?? '',
-      experience_required: 'none',
-      teen_friendly_score: teenScore,
-      schedule_flexibility_score: 78,
-      hiring_speed_score: profile.hiring_speed_score,
-      scam_risk_score: scamScore,
-      commute_estimate: 30,
-      physical_demand_level: 50,
-      customer_interaction_level: 70,
-      salary_min: raw.salary_min,
-      salary_max: raw.salary_max,
-      job_type: raw.job_type,
-      status: 'active',
-      verified_at: now,
-      last_checked_at: now,
-      http_status: verification.http_status,
-      is_active: true,
-      verification_status: 'verified',
-      posted_at: raw.posted_at ?? now,
-      last_verified_at: now,
-      embedding: null,
-    })
-
-    if (!error) stats.inserted++
+    // One batched INSERT for every genuinely new job. If a single row fails
+    // a constraint, Postgres can reject the whole batch — falling back to
+    // one-row-at-a-time ONLY in that failure case means a single bad row
+    // costs us that one row, not every good row alongside it.
+    if (toInsert.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabase.from('jobs').insert(toInsert as any)
+      if (!error) {
+        stats.inserted = toInsert.length
+      } else {
+        console.log(`[ingest-pipeline/${source}] batch insert of ${toInsert.length} rows failed, falling back to per-row:`, error.message)
+        for (const row of toInsert) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: rowError } = await supabase.from('jobs').insert(row as any)
+          if (!rowError) stats.inserted++
+        }
+      }
+    }
   }
 
   // Durable log row — non-critical, best-effort like the rest of this codebase's

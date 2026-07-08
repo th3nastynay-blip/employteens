@@ -15,7 +15,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 
-const INGESTION_SOURCES = ['adzuna', 'greenhouse', 'lever', 'ashby', 'smartrecruiters', 'jsearch']
+const INGESTION_SOURCES = ['adzuna', 'greenhouse', 'lever', 'ashby', 'smartrecruiters', 'jsearch', 'local']
+
+// Hudson County launch-market cities, matched against the location string.
+// Order matters: 'west new york' must be checked before 'new york'.
+const HUDSON_CITIES = [
+  'west new york', 'jersey city', 'hoboken', 'bayonne', 'union city',
+  'north bergen', 'secaucus', 'kearny', 'weehawken', 'guttenberg',
+  'harrison', 'east newark',
+]
 
 interface IngestDetails {
   verified?: number
@@ -46,10 +54,13 @@ export async function GET(req: NextRequest) {
   // ── Current snapshot: what's actually in the jobs table right now ──────────
   const { data: allJobs } = await supabase
     .from('jobs')
-    .select('source, verification_status, is_active, status, min_age')
+    .select('source, verification_status, is_active, status, min_age, location, company')
 
   const bySource: Record<string, number> = {}
   const byVerificationStatus: Record<string, number> = {}
+  // Launch-market coverage: visible jobs per Hudson County city
+  const byHudsonCity: Record<string, number> = {}
+  const visibleEmployers = new Set<string>()
   // Tracks whether the app actually has coverage across the full 14-19 teen
   // range, not just 16+ — added after discovering a 14-year-old test account
   // got zero matches because every currently-live job requires 16+.
@@ -65,6 +76,10 @@ export async function GET(req: NextRequest) {
       currentlyVerified++
       const ageKey = job.min_age <= 14 ? '14' : job.min_age === 15 ? '15' : job.min_age === 16 ? '16' : job.min_age === 17 ? '17' : '18+'
       byMinAgeVisible[ageKey] = (byMinAgeVisible[ageKey] ?? 0) + 1
+      if (job.company) visibleEmployers.add(String(job.company).toLowerCase().trim())
+      const loc = String(job.location ?? '').toLowerCase()
+      const city = HUDSON_CITIES.find((c) => loc.includes(c))
+      if (city) byHudsonCity[city] = (byHudsonCity[city] ?? 0) + 1
     }
     if (job.is_active) currentlyActive++
   }
@@ -131,6 +146,11 @@ export async function GET(req: NextRequest) {
       by_source: bySource,
       by_verification_status: byVerificationStatus,
       by_min_age_of_visible_jobs: byMinAgeVisible,
+      distinct_visible_employers: visibleEmployers.size,
+      // Launch-market coverage — visible jobs whose location names a Hudson
+      // County city. Jobs listed under a broader label ("New Jersey") don't
+      // count here even if they're physically in Hudson County.
+      hudson_county_by_city: byHudsonCity,
     },
 
     cumulative_since_tracking_began: {

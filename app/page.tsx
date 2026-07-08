@@ -1,7 +1,9 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { RotatingHeadline } from '@/components/home/RotatingHeadline'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -79,6 +81,15 @@ function MatchPreviewCard({
 }
 
 export default function HomePage() {
+  const [stats, setStats] = useState<{ active_jobs: number; verified_today: number } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/public-stats')
+      .then((r) => r.json())
+      .then((d) => { if (d?.active_jobs > 0) setStats(d) })
+      .catch(() => { /* line just doesn't render */ })
+  }, [])
+
   return (
     <main className="min-h-screen flex flex-col" style={{ background: 'var(--et-surface)' }}>
       <div className="flex-1 flex flex-col px-6 pt-14 pb-10 max-w-sm mx-auto w-full">
@@ -93,24 +104,14 @@ export default function HomePage() {
           <LogoMark />
         </motion.div>
 
-        {/* Headline */}
+        {/* Headline — rotates through ~15 lines, accent line stays brand purple */}
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease, delay: 0.08 }}
           className="mb-8"
         >
-          <h1 style={{
-            fontSize: '38px',
-            fontWeight: 800,
-            letterSpacing: '-0.04em',
-            lineHeight: 1.06,
-            color: 'var(--et-ink)',
-          }}>
-            Your next job<br />
-            <span className="match-gradient-text">already knows</span><br />
-            your schedule.
-          </h1>
+          <RotatingHeadline />
           <p style={{
             marginTop: '14px',
             fontSize: '16px',
@@ -130,21 +131,25 @@ export default function HomePage() {
             transition={{ delay: 0.2 }}
             className="section-label mb-1"
           >
-            Today&apos;s matches in your area
+            How your matches will look
           </motion.p>
 
           <MatchPreviewCard score={96} title="Crew Member" company="Chipotle Mexican Grill" detail="After school · 0.3 mi · Ages 16+" delay={0.25} />
           <MatchPreviewCard score={89} title="Barista" company="Starbucks" detail="Weekends · 0.7 mi · Flexible hours" delay={0.35} />
           <MatchPreviewCard score={82} title="Sales Associate" company="Target" detail="Evenings · 1.1 mi · Hires fast" delay={0.45} />
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            style={{ fontSize: '12px', color: 'var(--et-placeholder)', textAlign: 'center', marginTop: '4px' }}
-          >
-            + 44 more matches waiting for you
-          </motion.p>
+          {/* Real number from /api/public-stats — never a made-up count */}
+          {stats && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              style={{ fontSize: '12px', color: 'var(--et-placeholder)', textAlign: 'center', marginTop: '4px' }}
+            >
+              {stats.active_jobs.toLocaleString()} verified jobs live right now
+              {stats.verified_today > 0 ? ` · ${stats.verified_today.toLocaleString()} checked today` : ''}
+            </motion.p>
+          )}
         </div>
 
         {/* CTAs */}

@@ -90,7 +90,11 @@ export default function JobsTrackerPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    // async data fetch — state updates happen after awaits, not synchronously
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load()
+  }, [load])
 
   async function setStatus(jobId: string, status: AppStatus) {
     setTracked((prev) => prev.map((t) => (t.job.id === jobId ? { ...t, status, updated_at: new Date().toISOString() } : t)))

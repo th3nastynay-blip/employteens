@@ -393,6 +393,22 @@ export async function verifyJobUrl(
       }
     }
 
+    // Bot-blocked ≠ dead. Municipal sites and enterprise career pages
+    // (Cloudflare/Akamai) routinely 403 datacenter IPs regardless of UA.
+    // For CURATED program pages — hand-verified at curation time — a bot
+    // block is an inconclusive check, not evidence the program ended, so the
+    // entry stays live. Strong negative signals (404/410, closed-application
+    // language on a readable page) still deactivate it above. Non-curated
+    // sources keep strict behavior: a 403 there is a rejection.
+    if (opts?.programPage && (res.status === 403 || res.status === 429)) {
+      return {
+        status: 'verified',
+        http_status: res.status,
+        is_active: true,
+        reason: `Bot-blocked (${res.status}) — curated program page accepted; automated check inconclusive, not negative`,
+      }
+    }
+
     return {
       status: 'error',
       http_status: res.status,
@@ -401,6 +417,19 @@ export async function verifyJobUrl(
     }
   } catch (err) {
     const isTimeout = String(err).includes('abort') || String(err).includes('timeout')
+
+    // Same reasoning as the 403 case above: a timeout against a slow
+    // municipal server is inconclusive for a curated entry, not a death
+    // certificate. (hcstonline.org regularly takes >7s.)
+    if (opts?.programPage && isTimeout) {
+      return {
+        status: 'verified',
+        http_status: null,
+        is_active: true,
+        reason: 'Timed out — curated program page accepted; automated check inconclusive, not negative',
+      }
+    }
+
     return {
       status: 'error',
       http_status: null,

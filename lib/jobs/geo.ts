@@ -15,6 +15,11 @@ const IN_MARKET_PATTERNS: RegExp[] = [
   /\b(hoboken|jersey city|bayonne|union city|west new york|north bergen|secaucus|kearny|weehawken|guttenberg|harrison|east newark)\b/i,
   /\b(newark|paramus|woodbridge|clifton|hackensack|edgewater|fort lee)\b/i,
   /\b(albany|buffalo|rochester|syracuse|yonkers|white plains|long island)\b/i,
+  // County-form locations — Adzuna often returns "Belleville, Essex County"
+  // with no state at all. Queries are NY/NJ-scoped, so a NJ/NY county name
+  // without a contradicting out-of-market state is in-market.
+  /\b(hudson|bergen|essex|passaic|union|middlesex|monmouth|morris|ocean|somerset|mercer|camden|burlington|atlantic|gloucester|cumberland|hunterdon|sussex|warren|salem|cape may)\s+county\b/i,
+  /\b(westchester|nassau|suffolk|rockland|putnam|dutchess|orange|erie|monroe|onondaga|kings|richmond)\s+county\b/i,
 ]
 
 // States/regions that are definitively NOT our market. If one of these

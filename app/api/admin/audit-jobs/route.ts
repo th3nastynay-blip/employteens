@@ -46,6 +46,32 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createAdminClient()
 
+  // RECONSIDER MODE: geo false positives ("Belleville, Essex County" is NJ)
+  // were flagged before county-form locations were recognized. Walk flagged
+  // rows; anything that now passes the cheap gates goes back to active
+  // WITHOUT the audit mark, so the normal pass re-verifies it fully.
+  if (req.nextUrl.searchParams.get('mode') === 'reconsider') {
+    const { data: flaggedRows } = await supabase
+      .from('jobs')
+      .select('id, title, company, location, source, tags')
+      .eq('status', 'flagged')
+      .limit(1000)
+
+    let restored = 0
+    for (const j of flaggedRows ?? []) {
+      const isProgram = j.source === 'local'
+      if (isProgram || (isInMarket(j.location) && isTeenAppropriateTitle(j.title))) {
+        restored++
+        await supabase.from('jobs').update({
+          status: 'active',
+          is_active: true,
+          tags: (((j.tags as string[] | null) ?? []).filter((t) => !t.startsWith('_audited:') && !t.startsWith('_q:'))),
+        }).eq('id', j.id)
+      }
+    }
+    return NextResponse.json({ success: true, mode: 'reconsider', flagged_total: flaggedRows?.length ?? 0, restored })
+  }
+
   // Pull unaudited active jobs. Tag containment filter runs in SQL; the
   // NOT is applied client-side because PostgREST's negated contains on
   // arrays is awkward — so fetch a window and filter.

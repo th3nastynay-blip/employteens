@@ -35,6 +35,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { ingestNormalizedJobs, type NormalizedJob } from '@/lib/jobs/ingest-pipeline'
+import { isInMarket } from '@/lib/jobs/geo'
 
 // Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
 // Four sources looping through company lists plus per-job verification will
@@ -110,21 +111,17 @@ const SMARTRECRUITERS_COMPANIES = [
   { identifier: 'CityOfNewYork', name: 'City of New York', min_age: 18 },
 ]
 
-const NY_NJ_KEYWORDS = [
-  'new york', 'ny', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx',
-  'staten island', 'new jersey', 'nj', 'hoboken', 'jersey city', 'newark',
-  'paramus', 'woodbridge', 'clifton', 'hackensack',
-]
-
 const TEEN_JOB_KEYWORDS = [
   'crew', 'cashier', 'barista', 'team member', 'associate', 'host',
   'busser', 'runner', 'front desk', 'sales', 'stock', 'retail',
   'customer service', 'part.?time', 'seasonal', 'hourly',
 ]
 
+// Word-boundary market check (lib/jobs/geo.ts). The old bare-substring
+// version matched 'ny' inside "Sunnyvale" and 'manhattan' inside
+// "Manhattan Beach, CA" — California jobs were shipping to NJ teens.
 function isNYNJ(location: string): boolean {
-  const loc = location.toLowerCase()
-  return NY_NJ_KEYWORDS.some((kw) => loc.includes(kw))
+  return isInMarket(location)
 }
 
 function isTeenRelevant(title: string, description?: string): boolean {

@@ -17,7 +17,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import { verifyJobUrl, isGenericCareerPage } from './verify-url'
-import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, resolveMinAge } from './teen-scoring'
+import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, resolveMinAge, isTeenAppropriateTitle } from './teen-scoring'
 import { cleanJobTitle } from './clean-title'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from './quality-score'
 
@@ -65,6 +65,7 @@ export interface IngestStats {
   rejected_no_apply: number
   rejected_aggregator: number
   rejected_low_quality: number
+  rejected_not_teen_job: number
   inserted: number
   updated: number
   duplicate: number
@@ -101,6 +102,7 @@ export async function ingestNormalizedJobs(
     rejected_no_apply: 0,
     rejected_aggregator: 0,
     rejected_low_quality: 0,
+    rejected_not_teen_job: 0,
     inserted: 0,
     updated: 0,
     duplicate: 0,
@@ -175,6 +177,14 @@ export async function ingestNormalizedJobs(
 
       if (isGenericCareerPage(raw.apply_url)) {
         stats.rejected_generic++
+        continue
+      }
+
+      // A teenager can't be your VP of Product. Cheap check, runs before
+      // any network call. Curated entries skip it (hand-picked).
+      if (!raw.isProgramPage && !isTeenAppropriateTitle(raw.title)) {
+        stats.rejected_not_teen_job++
+        noteRejection(raw.apply_url, 'not_teen_job', `Adult role title: ${raw.title.slice(0, 60)}`)
         continue
       }
 

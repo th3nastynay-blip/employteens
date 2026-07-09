@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { verifyJobUrl } from '@/lib/jobs/verify-url'
 import { cleanJobTitle } from '@/lib/jobs/clean-title'
+import { isTeenAppropriateTitle } from '@/lib/jobs/teen-scoring'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from '@/lib/jobs/quality-score'
 
 export const maxDuration = 60
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
     flagged_expired_or_dead: 0,
     flagged_generic_or_search: 0,
     flagged_low_quality: 0,
+    flagged_not_teen_job: 0,
     retitled: 0,
     quality_scores: [] as number[],
     samples: [] as { before: string; after: string; company: string; action: string; quality: number }[],
@@ -79,6 +81,27 @@ export async function POST(req: NextRequest) {
       counters.audited++
 
       const isProgram = job.source === 'local'
+
+      // Adult roles (VP, Director, Engineer, Bartender…) have no business on
+      // a teen job board regardless of how legitimate the posting is. Cheap
+      // check first — skips the network fetch entirely.
+      if (!isProgram && !isTeenAppropriateTitle(job.title)) {
+        counters.flagged_not_teen_job++
+        counters.quality_scores.push(0)
+        if (counters.samples.length < 8) {
+          counters.samples.push({ before: job.title, after: job.title, company: job.company, action: 'flagged (not a teen job)', quality: 0 })
+        }
+        if (!dryRun) {
+          await supabase.from('jobs').update({
+            status: 'flagged',
+            is_active: false,
+            tags: [...(((job.tags as string[] | null) ?? []).filter((t) => t !== AUDIT_MARK)), '_q:0', AUDIT_MARK],
+            last_checked_at: new Date().toISOString(),
+          }).eq('id', job.id)
+        }
+        continue
+      }
+
       const verification = await verifyJobUrl(
         job.apply_url,
         7000,
@@ -188,6 +211,7 @@ export async function POST(req: NextRequest) {
       expired_or_dead: counters.flagged_expired_or_dead,
       generic_or_search: counters.flagged_generic_or_search,
       low_quality: counters.flagged_low_quality,
+      not_teen_job: counters.flagged_not_teen_job,
     },
     retitled: counters.retitled,
     avg_quality_score: avg,

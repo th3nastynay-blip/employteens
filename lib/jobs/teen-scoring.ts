@@ -96,6 +96,33 @@ export function resolveMinAge(title: string, company: string): number {
   return DEFAULT_PROFILE.min_age
 }
 
+/**
+ * Roles a 14–19 year old cannot realistically hold (or legally, for
+ * age-restricted work like bartending/security). Discovered live: Lever
+ * ingestion had "Vice President, Product" and "Director, Global Account
+ * Strategy" visible on a TEEN job board — the quality score measured
+ * application legitimacy, not whether a teenager could ever get (or want)
+ * the job. This gate runs before verification at ingest and during audit.
+ */
+const ADULT_ROLE_PATTERNS: RegExp[] = [
+  /\b(vice president|vp|president|chief|c[eftio]o|founder)\b/i,
+  /\bdirector\b/i,
+  /\bhead of\b/i,
+  /\b(senior|sr\.?|principal|staff|executive)\b/i,
+  /\bmanager\b/i,                    // shift LEADER stays allowed; manager roles are 18+
+  /\b(engineer|developer|architect|scientist|analyst|consultant)\b/i,
+  /\b(attorney|counsel|paralegal|accountant|controller|actuary|underwriter)\b/i,
+  /\b(nurse|physician|doctor|dentist|therapist|pharmacist|veterinar)\b/i,
+  /\b(electrician|plumber|hvac|welder|machinist|cdl|forklift)\b/i,
+  /\b(bartender|sommelier|mixologist)\b/i,   // 18+/21+ to serve alcohol in NJ/NY
+  /\b(security guard|armed|bouncer)\b/i,     // 18+
+  /\b\d+\+?\s*(years|yrs)\b/i,               // "5+ years" in a title
+]
+
+export function isTeenAppropriateTitle(title: string): boolean {
+  return !ADULT_ROLE_PATTERNS.some((p) => p.test(title))
+}
+
 export function scoreTeenFriendliness(input: TeenScoreInput): number {
   const profile = getCompanyProfile(input.company)
   let score = profile.teen_friendly_score

@@ -148,8 +148,14 @@ export function cleanJobTitle(rawTitle: string): CleanedTitle {
   // Strip leftover shouting and normalize whitespace
   working = working.replace(/\s+/g, ' ').trim()
 
+  // Trailing punctuation left by junk removal ("Operations Associate, Bronx, #620"
+  // → junk strips "#620" → "Operations Associate, Bronx," needs the comma gone
+  // BEFORE the comma-location strip can see the pattern)
+  working = working.replace(/[،,;:\-–—/\s]+$/, '').trim()
+
   // Titles ending in a comma-location: "Cashier, Jersey City" → "Cashier"
   working = working.replace(/,\s*[A-Z][a-zA-Z\s]+$/, '').trim()
+  working = working.replace(/[،,;:\-–—/\s]+$/, '').trim()
 
   if (working.length === 0) {
     return { title: raw.slice(0, 60), tags, confidence: 10 }

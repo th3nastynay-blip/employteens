@@ -29,7 +29,9 @@ import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from '@/lib/jobs/q
 
 export const maxDuration = 60
 
-const AUDIT_MARK = '_audited:v1'
+// v2: re-audits everything processed under v1 — the v1 cleaner left trailing
+// comma-locations ("Operations Associate, Bronx,") on ~100 rows.
+const AUDIT_MARK = '_audited:v2'
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -138,7 +140,7 @@ export async function POST(req: NextRequest) {
       }
 
       const newTags = Array.from(new Set([
-        ...((job.tags as string[] | null) ?? []).filter((t) => !t.startsWith('_q:') && t !== AUDIT_MARK && !t.startsWith('_orig:')),
+        ...((job.tags as string[] | null) ?? []).filter((t) => !t.startsWith('_q:') && !t.startsWith('_audited:') && !t.startsWith('_orig:')),
         ...cleaned.tags,
         qualityTag(quality.score),
         AUDIT_MARK,

@@ -36,6 +36,8 @@ export interface LocalSourceEntry {
   description: string
   min_age: number
   job_type: string
+  /** User-facing structured tags shown as badges on the card */
+  tags: string[]
   salary_min?: number
   salary_max?: number
   /**
@@ -52,7 +54,8 @@ const ALL_YEAR = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 export const LOCAL_SOURCES: LocalSourceEntry[] = [
   // ── Jersey City ────────────────────────────────────────────────────────
   {
-    title: 'JC Next Summer Youth Employment (Ages 15–24)',
+    title: 'Summer Youth Employment',
+    tags: ['Ages 15+', 'City program', 'Seasonal', '$17/hr'],
     company: 'City of Jersey City',
     location: 'Jersey City, NJ',
     city: 'Jersey City',
@@ -67,7 +70,8 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     activeMonths: [2, 3, 4, 5, 6, 7],
   },
   {
-    title: 'Teen Volunteer Program (Grades 6–12) — Path to Paid Roles',
+    title: 'Teen Volunteer',
+    tags: ['Ages 14+', 'Volunteer', 'Path to paid work'],
     company: 'Jersey City Free Public Library',
     location: 'Jersey City, NJ',
     city: 'Jersey City',
@@ -81,7 +85,8 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     activeMonths: ALL_YEAR,
   },
   {
-    title: 'Theatre Crew — Ages 14–17 Considered (School Work Permit)',
+    title: 'Theatre Crew',
+    tags: ['Ages 14+', 'Work permit needed', 'Part-time'],
     company: 'AMC Theatres',
     location: 'Jersey City, NJ',
     city: 'Jersey City',
@@ -96,7 +101,8 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
   },
   // ── Bayonne ────────────────────────────────────────────────────────────
   {
-    title: 'Summer Camp Counselor — Recreation Division',
+    title: 'Camp Counselor',
+    tags: ['Ages 15+', 'City program', 'Seasonal'],
     company: 'City of Bayonne',
     location: 'Bayonne, NJ',
     city: 'Bayonne',
@@ -111,7 +117,8 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
   },
   // ── Secaucus ───────────────────────────────────────────────────────────
   {
-    title: 'Summer Camp Staff — Recreation Department ($15.23/hr)',
+    title: 'Summer Camp Staff',
+    tags: ['Ages 15+', 'City program', 'Seasonal', '$15.23/hr'],
     company: 'Town of Secaucus',
     location: 'Secaucus, NJ',
     city: 'Secaucus',
@@ -127,7 +134,8 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
   },
   // ── West New York ──────────────────────────────────────────────────────
   {
-    title: 'Summer Youth Employment Program (Ages 15+)',
+    title: 'Summer Youth Employment',
+    tags: ['Ages 15+', 'City program', 'Seasonal'],
     company: 'Town of West New York',
     location: 'West New York, NJ',
     city: 'West New York',
@@ -142,7 +150,8 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
   },
   // ── Union City (countywide services) ───────────────────────────────────
   {
-    title: 'WIOA Youth Career Services (Ages 16–24) — Free Job Placement',
+    title: 'Youth Career Services',
+    tags: ['Ages 16+', 'Free program', 'Job placement help'],
     company: 'HCST Community Resource Center',
     location: 'Union City, NJ',
     city: 'Union City',

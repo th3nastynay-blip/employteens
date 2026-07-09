@@ -28,6 +28,7 @@ export type VerificationStatus =
   | 'unverified'
   | 'mismatch'
   | 'no_apply_mechanism'
+  | 'aggregator'
 
 export interface VerificationResult {
   status: VerificationStatus
@@ -87,6 +88,62 @@ const GENERIC_PATTERNS: RegExp[] = [
   /^https:\/\/www\.keyfood\.com\/?$/i,
   /^https:\/\/regmovies\.com\/static\/en-US\/careers\/?$/i,
 ]
+
+// Aggregator/job-board domains. A verified job's FINAL destination must be
+// the employer's own application flow (their site or their ATS) — landing on
+// any of these means the teen gets an intermediate page with another "apply"
+// hop, exactly the experience we refuse to ship. Checked against the
+// post-redirect URL, so an Adzuna link that resolves to an employer ATS is
+// fine; one that resolves to Indeed is rejected.
+const AGGREGATOR_DOMAINS = [
+  'adzuna.com',
+  'indeed.com',
+  'ziprecruiter.com',
+  'linkedin.com',
+  'glassdoor.com',
+  'simplyhired.com',
+  'monster.com',
+  'snagajob.com',
+  'talent.com',
+  'jobtoday.com',
+  'careerarc.com',
+  'lensa.com',
+  'jobs2careers.com',
+  'jobcase.com',
+  'joblist.com',
+  'bebee.com',
+  'whatjobs.com',
+  'jooble.org',
+  'adzuna.co.uk',
+  'neuvoo.com',
+  'careerbuilder.com',
+  'salary.com',
+  'jobrapido.com',
+  'jobisjob.com',
+  'trabajo.org',
+  'expertini.com',
+  'learn4good.com',
+]
+
+export function isAggregatorUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return AGGREGATOR_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))
+  } catch {
+    return false
+  }
+}
+
+// Search/browse pages: even on an employer's own domain, a URL whose path or
+// query marks it as a search result list is not ONE specific position.
+const SEARCH_PAGE_PATTERNS: RegExp[] = [
+  /[?&](q|query|search|keyword[s]?|what|where)=/i,
+  /\/(search|browse|find-a-job|find-jobs|job-search|all-jobs|listings)(\/|$|\?)/i,
+]
+
+export function isSearchPage(url: string): boolean {
+  return SEARCH_PAGE_PATTERNS.some((p) => p.test(url))
+}
 
 // Domains known to require JS rendering — HEAD request alone is insufficient.
 // We accept their URLs if they structurally look like specific job postings.
@@ -230,6 +287,20 @@ export async function verifyJobUrl(
     }
   }
 
+  // Step 1.5: Known aggregator that is NOT a redirect service — reject
+  // without a network call. Adzuna /land/ links redirect onward and must be
+  // fetched to learn their real destination; Indeed/LinkedIn/etc links ARE
+  // the destination, and it's one we never ship.
+  const isAdzunaRedirect = /adzuna\.[a-z.]+\/land\//i.test(url)
+  if (isAggregatorUrl(url) && !isAdzunaRedirect) {
+    return {
+      status: 'aggregator',
+      http_status: null,
+      is_active: false,
+      reason: `Aggregator link (${(() => { try { return new URL(url).hostname } catch { return 'unknown' } })()}) — not a direct employer application`,
+    }
+  }
+
   // Step 2: For JS-required ATSs, trust the URL if it has a specific job ID pattern.
   // Title/location came from that same ATS's structured API response, so we don't
   // re-verify content here — the ingest step already has the source of truth.
@@ -278,6 +349,31 @@ export async function verifyJobUrl(
 
     clearTimeout(timeout)
     const finalUrl = res.url
+
+    // The FINAL destination must be the employer's application flow. Landing
+    // on an aggregator/job board means another hop before the real apply —
+    // rejected outright, whatever the HTTP status says.
+    if (isAggregatorUrl(finalUrl)) {
+      return {
+        status: 'aggregator',
+        http_status: res.status,
+        is_active: false,
+        reason: `Final destination is an aggregator (${new URL(finalUrl).hostname}) — not a direct employer application`,
+        final_url: finalUrl,
+      }
+    }
+
+    // Search/browse pages are not ONE specific position, even on the
+    // employer's own domain.
+    if (!opts?.programPage && isSearchPage(finalUrl)) {
+      return {
+        status: 'generic',
+        http_status: res.status,
+        is_active: false,
+        reason: `Final URL is a search/list page — not a specific posting: ${finalUrl}`,
+        final_url: finalUrl,
+      }
+    }
 
     // Check if we were redirected to a generic career page
     if (finalUrl !== url && isGenericCareerPage(finalUrl)) {

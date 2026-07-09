@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { recordApplyClick } from '@/lib/apply-tracking'
+import { visibleTags } from '@/lib/jobs/quality-score'
 import type { JobMatch } from '@/lib/types/database'
 
 interface JobCardProps {
@@ -126,6 +127,14 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
     : false
   const teenFavorite = job.teen_friendly_score >= 90
 
+  // Curated city programs are honestly labeled — they're program pages with
+  // an application flow, not single-position postings, so the CTA says what
+  // actually happens ("Learn & apply"), and a City program badge marks them.
+  const isProgram = job.source === 'local' &&
+    (job.job_type === 'program' || job.job_type === 'volunteer' || job.job_type === 'seasonal')
+  // Age tags are redundant with the dedicated "Ages N+" badge below
+  const structuredTags = visibleTags(job.tags).filter((t) => !/^ages\s/i.test(t)).slice(0, 4)
+
   return (
     <motion.div
       layout
@@ -146,7 +155,12 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             <span className="match-gradient-text" style={{ fontSize: '13px', fontWeight: 800 }}>
               {matchLabel}
             </span>
-            {isNew && (
+            {isProgram && (
+              <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
+                🏛️ City program
+              </span>
+            )}
+            {isNew && !isProgram && (
               <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
                 New
               </span>
@@ -246,6 +260,9 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             </span>
           )}
           <span className="badge badge-green">Ages {job.min_age}+</span>
+          {structuredTags.map((t) => (
+            <span key={t} className="badge badge-subtle">{t}</span>
+          ))}
           {teenFavorite && (
             <span className="badge badge-subtle">💜 Teen favorite</span>
           )}
@@ -290,7 +307,7 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             className="btn-primary flex-1"
             style={{ height: 46, borderRadius: 'var(--radius-md)', fontSize: '14px' }}
           >
-            Apply Now →
+            {isProgram ? 'Learn & apply →' : 'Apply Now →'}
           </motion.button>
         </div>
       </div>

@@ -18,6 +18,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import { verifyJobUrl, isGenericCareerPage } from './verify-url'
 import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, resolveMinAge } from './teen-scoring'
+import { cleanJobTitle } from './clean-title'
+import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from './quality-score'
 
 export interface NormalizedJob {
   title: string
@@ -48,6 +50,8 @@ export interface NormalizedJob {
    * See VerifyOptions.programPage in verify-url.ts.
    */
   isProgramPage?: boolean
+  /** Pre-set user-facing tags (curated sources); merged with tags extracted from the title */
+  tags?: string[]
 }
 
 export interface IngestStats {
@@ -59,6 +63,8 @@ export interface IngestStats {
   rejected_mismatch: number
   rejected_scam: number
   rejected_no_apply: number
+  rejected_aggregator: number
+  rejected_low_quality: number
   inserted: number
   updated: number
   duplicate: number
@@ -93,6 +99,8 @@ export async function ingestNormalizedJobs(
     rejected_mismatch: 0,
     rejected_scam: 0,
     rejected_no_apply: 0,
+    rejected_aggregator: 0,
+    rejected_low_quality: 0,
     inserted: 0,
     updated: 0,
     duplicate: 0,
@@ -201,6 +209,12 @@ export async function ingestNormalizedJobs(
         continue
       }
 
+      if (verification.status === 'aggregator') {
+        stats.rejected_aggregator++
+        noteRejection(raw.apply_url, verification.status, verification.reason)
+        continue
+      }
+
       if (!verification.is_active) {
         stats.rejected_url++
         noteRejection(raw.apply_url, verification.status, `HTTP ${verification.http_status ?? '—'}: ${verification.reason}`)
@@ -258,8 +272,36 @@ export async function ingestNormalizedJobs(
         apply_url: v.raw.apply_url,
       })
 
+      // Product-quality title: clean role name only; everything informative
+      // from the raw title becomes structured tags.
+      const cleaned = cleanJobTitle(v.raw.title)
+
+      // Quality gate — below threshold never enters the table
+      const quality = computeQualityScore({
+        apply_url: v.finalUrl,
+        company: v.raw.company,
+        title_confidence: cleaned.confidence,
+        scam_risk_score: scamScore,
+        salary_min: v.raw.salary_min,
+        description: v.raw.description,
+        posted_at: v.raw.posted_at,
+        is_curated: v.raw.isProgramPage,
+      })
+      if (quality.score < MIN_QUALITY_SCORE) {
+        stats.rejected_low_quality++
+        noteRejection(v.finalUrl, 'low_quality', `Quality ${quality.score} < ${MIN_QUALITY_SCORE} (${quality.signals.join(', ')})`)
+        continue
+      }
+
+      const tags = Array.from(new Set([
+        ...(v.raw.tags ?? []),
+        ...cleaned.tags,
+        qualityTag(quality.score),
+      ]))
+
       toInsert.push({
-        title: v.raw.title,
+        title: cleaned.title,
+        tags,
         company: v.raw.company,
         location: v.raw.location,
         state: inferState(v.raw.location, v.raw.state),

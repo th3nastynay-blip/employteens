@@ -47,6 +47,7 @@ export async function runLocalIngest(supabase: SupabaseClient<Database>) {
     job_type: e.job_type,
     salary_min: e.salary_min,
     salary_max: e.salary_max,
+    tags: e.tags,
     isProgramPage: true,
   }))
 

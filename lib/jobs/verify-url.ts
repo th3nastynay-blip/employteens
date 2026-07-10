@@ -288,10 +288,14 @@ export async function verifyJobUrl(
   }
 
   // Step 1.5: Known aggregator that is NOT a redirect service — reject
-  // without a network call. Adzuna /land/ links redirect onward and must be
-  // fetched to learn their real destination; Indeed/LinkedIn/etc links ARE
-  // the destination, and it's one we never ship.
-  const isAdzunaRedirect = /adzuna\.[a-z.]+\/land\//i.test(url)
+  // without a network call. ANY adzuna.com link from their API (both /land/
+  // and /details/ forms) is a click-tracking redirect that must be fetched
+  // to learn its real destination — pre-rejecting them killed 100% of the
+  // Adzuna source in production (935 fetched, 0 verified). Indeed/LinkedIn/
+  // etc links ARE the destination, and it's one we never ship. If an Adzuna
+  // link's redirect chain ends ON an aggregator, the final-URL check below
+  // still rejects it.
+  const isAdzunaRedirect = /(^|\.)adzuna\.[a-z.]+$/i.test((() => { try { return new URL(url).hostname } catch { return '' } })())
   if (isAggregatorUrl(url) && !isAdzunaRedirect) {
     return {
       status: 'aggregator',

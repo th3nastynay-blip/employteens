@@ -48,9 +48,19 @@ const TENANTS: WorkdayTenant[] = [
     searchTexts: ['New Jersey', 'New York'],
   },
   {
-    // Candidate (unconfirmed tenant/site — fails safe with 0 jobs if wrong)
+    // Confirmed live in production 2026-07-09 (first run inserted JC/Hoboken roles)
     tenant: 'cvshealth', wd: 'wd1', site: 'CVS_Health_Careers', name: 'CVS Health', min_age: 16,
-    searchTexts: ['Jersey City NJ', 'Hoboken NJ'],
+    searchTexts: ['Jersey City NJ', 'Hoboken NJ', 'Bayonne NJ', 'Union City NJ'],
+  },
+  {
+    // Confirmed live: target.wd5.myworkdayjobs.com/targetcareers
+    tenant: 'target', wd: 'wd5', site: 'targetcareers', name: 'Target', min_age: 16,
+    searchTexts: ['Jersey City NJ', 'North Bergen NJ', 'New York NY'],
+  },
+  {
+    // Confirmed live: michaels.wd5.myworkdayjobs.com/External
+    tenant: 'michaels', wd: 'wd5', site: 'External', name: 'Michaels', min_age: 16,
+    searchTexts: ['New Jersey', 'New York NY'],
   },
 ]
 

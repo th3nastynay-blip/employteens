@@ -85,6 +85,14 @@ export default function DashboardPage() {
     if (preComputed && preComputed.length > 0) {
       // Cast needed: Supabase types can't infer join shape without Relationships declarations
       type RawMatch = { match_score: number; match_explanation: string | null; feed_section: string; jobs: unknown }
+
+      // The cache can be STALE: written before a job was flagged/expired, or
+      // before the user set their age. Re-check everything against current
+      // job state and current profile — never trust the cache on safety
+      // filters. A 14-year-old must not see a 16+ job, period.
+      const userAge: number | null = profileRes.data?.age ?? null
+      const effectiveAge = userAge ?? 14
+
       const matchedJobs: JobMatch[] = (preComputed as RawMatch[])
         .filter((m) => m.jobs && typeof m.jobs === 'object')
         .map((m) => ({
@@ -92,10 +100,28 @@ export default function DashboardPage() {
           match_score: m.match_score,
           match_explanation: m.match_explanation ?? '',
         }))
+        .filter((j) =>
+          j.status === 'active' &&
+          j.is_active &&
+          j.verification_status === 'verified' &&
+          j.scam_risk_score < 70 &&
+          effectiveAge >= j.min_age,
+        )
 
-      classifyAndSetJobs(matchedJobs)
-      setTotalCount(matchedJobs.length)
-      return
+      if (matchedJobs.length >= 3) {
+        classifyAndSetJobs(matchedJobs)
+        setTotalCount(matchedJobs.length)
+        // Cache had stale rows — refresh it in the background
+        if (matchedJobs.length < preComputed.length) {
+          fetch('/api/match-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id }),
+          }).catch(() => {/* non-critical */})
+        }
+        return
+      }
+      // Cache mostly stale — fall through to the fresh compute below
     }
 
     // Fallback: run match engine on-the-fly if no pre-computed matches
@@ -116,8 +142,9 @@ export default function DashboardPage() {
     const userProfile = profileRes.data as unknown as UserProfile
     const scored: JobMatch[] = []
 
+    const freshEffectiveAge = userProfile.age ?? 14
     for (const job of allJobs as JobRow[]) {
-      if (userProfile.age && userProfile.age < job.min_age) continue
+      if (freshEffectiveAge < job.min_age) continue
       const { match_score, match_explanation } = computeMatchScore(userProfile, job)
       if (match_score < 30) continue
       scored.push({ ...job, match_score, match_explanation })

@@ -64,8 +64,11 @@ export async function POST(req: NextRequest) {
       generated_at: string
     }[] = []
 
+    // Missing age = assume 14 (most restrictive), never "no filter"
+    const effectiveAge = userProfile.age ?? 14
+
     for (const job of jobs as JobRow[]) {
-      if (userProfile.age && userProfile.age < job.min_age) continue
+      if (effectiveAge < job.min_age) continue
 
       const { match_score, match_explanation, feed_section } = computeMatchScore(userProfile, job)
       if (match_score < 30) continue
@@ -80,9 +83,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // ALWAYS clear old matches — even when zero new ones qualify. Leaving
+    // the stale cache in place when matches.length === 0 kept serving jobs
+    // that no longer pass the filters.
+    await supabase.from('job_matches').delete().eq('user_id', user_id)
     if (matches.length > 0) {
-      // Delete old matches first, then insert fresh ones
-      await supabase.from('job_matches').delete().eq('user_id', user_id)
       await supabase.from('job_matches').insert(matches)
     }
 

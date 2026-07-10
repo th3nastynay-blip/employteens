@@ -60,9 +60,15 @@ export async function POST(req: NextRequest) {
       generated_at: string
     }[] = []
 
+    // No age on profile = most restrictive assumption (14), NOT no filter.
+    // The old `age && age < min_age` check silently disabled age filtering
+    // for pre-onboarding users, caching 16+ jobs that persisted after the
+    // user set their age to 14.
+    const effectiveAge = userProfile.age ?? 14
+
     for (const job of jobs as JobRow[]) {
       // Skip ineligible by age
-      if (userProfile.age && userProfile.age < job.min_age) continue
+      if (effectiveAge < job.min_age) continue
       // Skip cross-state if walking/biking
       const transport = (user as { transportation?: string }).transportation
       if (transport === 'walking' || transport === 'bike') {
@@ -82,10 +88,12 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Delete-then-insert (not upsert): upsert left stale rows behind forever,
+    // so jobs flagged/expired AFTER a cache write kept appearing in feeds —
+    // the "expired links in my feed" bug.
+    await supabase.from('job_matches').delete().eq('user_id', user.id)
     if (userMatches.length > 0) {
-      await supabase
-        .from('job_matches')
-        .upsert(userMatches, { onConflict: 'user_id,job_id' })
+      await supabase.from('job_matches').insert(userMatches)
       matched += userMatches.length
     }
 

@@ -20,6 +20,7 @@ import { verifyJobUrl, isGenericCareerPage } from './verify-url'
 import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, resolveMinAge, isTeenAppropriateTitle } from './teen-scoring'
 import { cleanJobTitle } from './clean-title'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from './quality-score'
+import { zipFromLocation } from './geo'
 
 export interface NormalizedJob {
   title: string
@@ -315,7 +316,9 @@ export async function ingestNormalizedJobs(
         company: v.raw.company,
         location: v.raw.location,
         state: inferState(v.raw.location, v.raw.state),
-        zip_code: v.raw.zip_code ?? '00000',
+        // '00000' poisoned distance scoring — derive a city-central ZIP from
+        // the location string so the match engine can compute honest miles.
+        zip_code: v.raw.zip_code ?? zipFromLocation(v.raw.location) ?? '00000',
         apply_url: v.finalUrl,
         source,
         min_age: v.raw.min_age ?? resolveMinAge(v.raw.title, v.raw.company),

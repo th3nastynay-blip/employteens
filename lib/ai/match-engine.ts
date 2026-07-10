@@ -70,6 +70,22 @@ const ZIP_CENTROIDS: Record<string, [number, number]> = {
   '10001': [40.750, -73.997], '10003': [40.731, -73.989], '10011': [40.742, -74.000],
   '10014': [40.734, -74.006], '10280': [40.708, -74.017], '10282': [40.717, -74.015],
   '11201': [40.694, -73.990],
+  // City-central zips assigned by geo.ts zipFromLocation() at ingest —
+  // every zip that function can produce must resolve to a centroid here.
+  '07201': [40.664, -74.211], // Elizabeth
+  '07501': [40.916, -74.172], // Paterson
+  '07011': [40.879, -74.140], // Clifton
+  '07601': [40.886, -74.045], // Hackensack
+  '07024': [40.851, -73.971], // Fort Lee
+  '07020': [40.827, -73.974], // Edgewater
+  '07652': [40.945, -74.070], // Paramus
+  '07109': [40.794, -74.162], // Belleville
+  '07003': [40.803, -74.187], // Bloomfield
+  '07042': [40.813, -74.212], // Montclair
+  '11354': [40.768, -73.827], // Flushing/Queens
+  '10451': [40.820, -73.925], // South Bronx
+  '10301': [40.631, -74.094], // Staten Island
+  '10701': [40.940, -73.880], // Yonkers
 }
 
 function haversineMiles(a: [number, number], b: [number, number]): number {
@@ -142,18 +158,21 @@ function scoreLocation(
     if (miles <= maxRange * 0.4) return { score: 100, miles }
     if (miles <= maxRange * 0.75) return { score: 90, miles }
     if (miles <= maxRange) return { score: 78, miles }
-    if (miles <= maxRange * 1.5) return { score: 55, miles }
-    return { score: 30, miles }
+    if (miles <= maxRange * 1.5) return { score: 50, miles }
+    if (miles <= maxRange * 2.5) return { score: 25, miles }
+    return { score: 5, miles } // Syracuse is not "near" Jersey City
   }
 
-  // Fallback: ZIP prefix heuristic (outside centroid coverage)
-  const samePrefix = user.zip_code.slice(0, 3) === job.zip_code.slice(0, 3)
+  // Unknown distance is now CONSERVATIVE, not optimistic. The old fallback
+  // guessed "same state ≈ 6 miles", which floated far-away and no-ZIP jobs
+  // ('00000') to the top of local feeds. If we can't verify a job is close,
+  // it must not outrank one we know is close.
+  const samePrefix = job.zip_code?.length === 5 && job.zip_code !== '00000' &&
+    user.zip_code.slice(0, 3) === job.zip_code.slice(0, 3)
   const sameState = user.state === job.state
-  const estimatedMiles = samePrefix ? 2 : sameState ? 6 : 12
-  if (estimatedMiles <= maxRange * 0.5) return { score: 95, miles: null }
-  if (estimatedMiles <= maxRange) return { score: 80, miles: null }
-  if (estimatedMiles <= maxRange * 1.5) return { score: 55, miles: null }
-  return { score: 35, miles: null }
+  if (samePrefix) return { score: 65, miles: null }  // plausibly close, unproven
+  if (sameState) return { score: 35, miles: null }
+  return { score: 10, miles: null }
 }
 
 function scoreInterests(user: UserProfile, job: JobRow): number {

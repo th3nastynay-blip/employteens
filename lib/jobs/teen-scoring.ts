@@ -38,6 +38,8 @@ export const TEEN_FRIENDLY_COMPANIES: Record<string, TeenScoreProfile> = {
   sweetgreen: { teen_friendly_score: 86, hiring_speed_score: 75, min_age: 16 },
   walgreen: { teen_friendly_score: 82, hiring_speed_score: 73, min_age: 16 },
   cvs: { teen_friendly_score: 83, hiring_speed_score: 74, min_age: 16 },
+  wegmans: { teen_friendly_score: 92, hiring_speed_score: 72, min_age: 15 },
+  'insomnia cookies': { teen_friendly_score: 88, hiring_speed_score: 80, min_age: 16 },
   // Hudson County municipal / program employers (curated local sources).
   // Youth employment programs are literally designed for teens — max
   // friendliness. Also matters for detectScamRisk: a recognized employer

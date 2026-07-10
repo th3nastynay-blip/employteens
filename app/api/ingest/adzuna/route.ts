@@ -158,12 +158,19 @@ export async function POST(req: NextRequest) {
   const rawResults: NormalizedJob[] = []
   const queue = [...allQueries]
 
+  // Hudson County city queries get a second results page — the launch market
+  // deserves depth, and Pass-0 in the pipeline makes re-seen URLs free.
+  const HUDSON_CITIES = ['Jersey City', 'Hoboken', 'Bayonne', 'Union City', 'North Bergen', 'Secaucus']
+
   async function fetchWorker() {
     while (queue.length > 0) {
       const q = queue.shift()
       if (!q) break
       try {
-        const results = await fetchAdzunaPage(verifiedAppId, verifiedAppKey, q.q, q.where)
+        const pages = HUDSON_CITIES.includes(q.where) ? [1, 2] : [1]
+        const results = (
+          await Promise.all(pages.map((p) => fetchAdzunaPage(verifiedAppId, verifiedAppKey, q.q, q.where, p)))
+        ).flat()
         for (const r of results) {
           if (!r.redirect_url) continue
           rawResults.push({

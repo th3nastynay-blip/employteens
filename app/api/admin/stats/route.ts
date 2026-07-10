@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 
-const INGESTION_SOURCES = ['adzuna', 'greenhouse', 'lever', 'ashby', 'smartrecruiters', 'jsearch', 'local']
+const INGESTION_SOURCES = ['adzuna', 'greenhouse', 'lever', 'ashby', 'smartrecruiters', 'jsearch', 'local', 'workday']
 
 // Hudson County launch-market cities, matched against the location string.
 // Order matters: 'west new york' must be checked before 'new york'.

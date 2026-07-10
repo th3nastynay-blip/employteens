@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { verifyBatch, isGenericCareerPage } from '@/lib/jobs/verify-url'
 import { runLocalIngest } from '@/lib/jobs/local-ingest'
+import { runWorkdayIngest } from '@/lib/jobs/workday-ingest'
 
 // Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
 export const maxDuration = 60
@@ -59,6 +60,15 @@ export async function GET(req: NextRequest) {
     results.local_out_of_season = localStats.deactivated_out_of_season
   } catch (err) {
     console.log('[cron/clean-jobs] local ingest failed (continuing cleanup):', String(err).slice(0, 200))
+  }
+
+  // ── 0.5. Workday direct-employer ingestion (same scheduling constraint) ──
+  try {
+    const wd = await runWorkdayIngest(supabase)
+    results.workday_verified = wd.verified
+    results.workday_inserted = wd.inserted
+  } catch (err) {
+    console.log('[cron/clean-jobs] workday ingest failed (continuing cleanup):', String(err).slice(0, 200))
   }
 
   // ── 1. Re-verify the oldest-checked active jobs ────────────────────────

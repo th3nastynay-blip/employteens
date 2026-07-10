@@ -16,6 +16,9 @@
  * deactivate entries, and clean-jobs deactivates anything whose page dies.
  * Nobody hand-edits live job rows.
  *
+ * REMOVED 2026-07-09: JCFPL Teen Volunteer entry — unpaid volunteer
+ * listings are out per product direction (paid work only).
+ *
  * RESEARCH PROVENANCE (July 2026): every URL below was found and confirmed
  * live via web research. Age floors come from the programs' own published
  * requirements where stated. Key finding worth remembering: even Hudson
@@ -68,21 +71,6 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     job_type: 'seasonal',
     salary_min: 17,
     activeMonths: [2, 3, 4, 5, 6, 7],
-  },
-  {
-    title: 'Teen Volunteer',
-    tags: ['Ages 14+', 'Volunteer', 'Path to paid work'],
-    company: 'Jersey City Free Public Library',
-    location: 'Jersey City, NJ',
-    city: 'Jersey City',
-    state: 'NJ',
-    zip_code: '07306',
-    apply_url: 'https://jclibrary.org/services/teens/',
-    description:
-      'The Jersey City Free Public Library trains middle and high school teens as volunteers across its branches. Volunteer hours count for school requirements, build a reference and work history, and library volunteers are well positioned for paid page/clerk openings when they appear. One of the few structured options open at 14.',
-    min_age: 14,
-    job_type: 'volunteer',
-    activeMonths: ALL_YEAR,
   },
   {
     title: 'Theatre Crew',

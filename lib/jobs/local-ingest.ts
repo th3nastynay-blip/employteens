@@ -10,10 +10,28 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import { ingestNormalizedJobs, type NormalizedJob } from '@/lib/jobs/ingest-pipeline'
-import { inSeasonEntries, outOfSeasonEntries } from '@/lib/jobs/local-sources'
+import { LOCAL_SOURCES, inSeasonEntries, outOfSeasonEntries } from '@/lib/jobs/local-sources'
 
 export async function runLocalIngest(supabase: SupabaseClient<Database>) {
   const month = new Date().getMonth() + 1
+
+  // 0. Orphan cleanup: any live 'local' row whose URL is no longer in the
+  // directory was removed on purpose (e.g. the unpaid volunteer entry) —
+  // deactivate it. Without this, deleting a directory entry would leave its
+  // job live for up to 14 days until the expiry sweep caught it.
+  const directoryUrls = LOCAL_SOURCES.map((e) => e.apply_url)
+  const { data: liveLocal } = await supabase
+    .from('jobs')
+    .select('id, apply_url')
+    .eq('source', 'local')
+    .eq('status', 'active')
+  const orphans = (liveLocal ?? []).filter((r) => !directoryUrls.includes(r.apply_url))
+  if (orphans.length > 0) {
+    await supabase
+      .from('jobs')
+      .update({ status: 'inactive', is_active: false, verification_status: 'expired' })
+      .in('id', orphans.map((o) => o.id))
+  }
 
   // 1. Deactivate out-of-season entries (no network calls needed). They
   // reactivate automatically when their window returns — the pipeline's

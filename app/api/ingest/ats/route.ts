@@ -65,6 +65,17 @@ const GREENHOUSE_COMPANIES = [
   { slug: 'classpass', name: 'ClassPass', min_age: 16 },
   { slug: 'soulcycle', name: 'SoulCycle', min_age: 16 },
   { slug: 'barry-s-bootcamp', name: "Barry's Bootcamp", min_age: 18 },
+  // Candidate slugs added 2026-07-09 — teen-relevant chains with NY/NJ
+  // presence. Unconfirmed slugs fail safe: a 404 board yields zero jobs and
+  // costs one fetch. Anything that resolves goes through full verification.
+  { slug: 'playabowls', name: 'Playa Bowls', min_age: 16 },
+  { slug: 'vanleeuwenicecream', name: 'Van Leeuwen Ice Cream', min_age: 16 },
+  { slug: 'levainbakery', name: 'Levain Bakery', min_age: 16 },
+  { slug: 'bluestonelane', name: 'Bluestone Lane', min_age: 16 },
+  { slug: 'magnoliabakery', name: 'Magnolia Bakery', min_age: 16 },
+  { slug: 'pressedjuicery', name: 'Pressed Juicery', min_age: 16 },
+  { slug: 'chopt', name: 'Chopt Creative Salad', min_age: 16 },
+  { slug: 'justsaladcareers', name: 'Just Salad', min_age: 16 },
 ]
 
 // Rebuilt 2026-07-08 after the original 6 slugs (sweetgreen, shake-shack,
@@ -86,6 +97,9 @@ const LEVER_COMPANIES = [
   { slug: 'thuma', name: 'Thuma', min_age: 16 },
   { slug: 'boxlunch', name: 'BoxLunch / Hot Topic', min_age: 16 },
   { slug: 'gopuff', name: 'Gopuff', min_age: 16 },
+  // Confirmed live 2026-07-09 via api.lever.co probe — Cookie Crew roles,
+  // NYC/Hoboken stores, classic teen employer
+  { slug: 'insomniacookies', name: 'Insomnia Cookies', min_age: 16 },
 ]
 
 // Companies confirmed to use Ashby with teen-relevant roles.

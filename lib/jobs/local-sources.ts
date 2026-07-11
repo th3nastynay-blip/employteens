@@ -64,9 +64,12 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     city: 'Jersey City',
     state: 'NJ',
     zip_code: '07302',
-    apply_url: 'https://www.jerseycitynj.gov/news/application_open_for_summer_youth_employment',
+    // Browser-verified 2026-07-10: the old URL was a stale 2022 news post
+    // ("apply through March 6, 2022"). This is the current JC Next launch
+    // page (posted 05/14/2026) with the live application link inside.
+    apply_url: 'https://www.jerseycitynj.gov/news/mayor_solomon_launches___j_c_next_',
     description:
-      'Jersey City\'s JC Next program places residents ages 15–24 in paid summer positions — roughly 700 slots at $17/hour, 25 hours/week, running July through late August. Selection prioritizes first-time workers, low-income youth, and students from underrepresented neighborhoods. A strong first job with real mentorship built in.',
+      'Jersey City\'s JC Next program places residents ages 15–24 in paid summer positions — roughly 700 slots at $17/hour, 25 hours/week, running July 6 through August 21. Selection prioritizes first-time workers, low-income youth, and students from underrepresented neighborhoods. The application link is on this page — a strong first job with real mentorship built in.',
     min_age: 15,
     job_type: 'seasonal',
     salary_min: 17,
@@ -145,9 +148,13 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     city: 'Union City',
     state: 'NJ',
     zip_code: '07087',
-    apply_url: 'http://www.hcstonline.org/cdc-one-stop/the-workforce-innovation-opportunity-act/',
+    // Browser-verified 2026-07-10: old hcstonline.org URL is a 404 (was
+    // masked by a fetch timeout, which the programPage policy treated as
+    // inconclusive). This county page is live and describes the same
+    // Union City CRC services with application links.
+    apply_url: 'https://www.hcnj.us/communityresources/hcst-resource-center/',
     description:
-      'Hudson County Schools of Technology\'s One-Stop center in Union City (satellites in Bayonne and East Newark) provides free skills assessment, job search help, training, and placement for youth ages 16–24 under the federal WIOA program. Not a single job — a door to many, with a real counselor behind it.',
+      'Hudson County Schools of Technology\'s Community Resource Center in Union City (satellites in Bayonne and East Newark) provides free skills training, career planning, and job search assistance, plus a diploma-prep program for out-of-school youth 16–24. Not a single job — a door to many, with a real counselor behind it.',
     min_age: 16,
     job_type: 'program',
     activeMonths: ALL_YEAR,

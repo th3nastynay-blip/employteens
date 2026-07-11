@@ -245,10 +245,19 @@ export default function CareerPage() {
         }
       }
 
-      // Mark streaming done
+      // Mark streaming done. If NOTHING parseable arrived (non-SSE error
+      // response, dropped connection), never leave a silent empty bubble.
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId ? { ...m, streaming: false } : m
+          m.id === assistantId
+            ? {
+                ...m,
+                streaming: false,
+                content: m.content.trim() === ''
+                  ? "Hmm, I didn't get a response through — give it another try. If it keeps happening, refresh the page."
+                  : m.content,
+              }
+            : m
         )
       )
     } catch (err: unknown) {

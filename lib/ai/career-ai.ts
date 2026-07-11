@@ -1,8 +1,10 @@
 /**
  * EMPLOYTEENS — AI Coach System
- * Provider: Google Gemini 2.0 Flash (free tier, no credit card required)
- * Get a key: https://aistudio.google.com → Get API key
- * Env var: GEMINI_API_KEY
+ * Provider: Groq (llama-3.3-70b-versatile, OpenAI-compatible streaming)
+ * Get a key: https://console.groq.com → API Keys
+ * Env var: GROQ_API_KEY   (header previously said Gemini — that was stale
+ * and cost real debugging time when the key "was in there" under a name
+ * the code never read)
  */
 
 import type { UserProfile } from '@/lib/types/database'
@@ -39,6 +41,34 @@ export interface CoachPromptExtras {
   insights?: { type: string; text: string }[]
 }
 
+/**
+ * Profile fields arrive in whatever shape onboarding stored: a real array,
+ * a JSON-encoded string, a weighted-object array, or null. Calling .join()
+ * on the wrong one THREW inside the route and rendered as empty chat
+ * bubbles — the model never even got called.
+ */
+function safeList(value: unknown): string {
+  try {
+    let v = value
+    if (typeof v === 'string') {
+      try { v = JSON.parse(v) } catch { return v as string }
+    }
+    if (Array.isArray(v)) {
+      return v
+        .map((item) => {
+          if (typeof item === 'string') return item
+          if (item && typeof item === 'object' && 'name' in item) return String((item as { name: unknown }).name)
+          return String(item)
+        })
+        .filter(Boolean)
+        .join(', ')
+    }
+    return v ? String(v) : ''
+  } catch {
+    return ''
+  }
+}
+
 function daysAgoLabel(iso?: string): string {
   if (!iso) return ''
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
@@ -65,9 +95,9 @@ function buildSystemPrompt(
 - State: ${userProfile.state}, ZIP: ${userProfile.zip_code}
 - Grade: ${userProfile.school_grade}, School ends: ${userProfile.school_end_time}
 - Days available to work: ${availableDays}
-- Transportation: ${userProfile.transportation}
-- Skills: ${(userProfile.skills as string[]).join(', ') || 'none listed'}
-- Interests: ${(userProfile.interests as string[]).join(', ') || 'none listed'}
+- Transportation: ${safeList(userProfile.transportation) || 'unknown'}
+- Skills: ${safeList(userProfile.skills) || 'none listed'}
+- Interests: ${safeList(userProfile.interests) || 'none listed'}
 - Resume on file: ${userProfile.resume_url ? 'yes' : 'no'}
 `
     : '\n## User Profile\nNot yet loaded — respond helpfully without profile context.\n'

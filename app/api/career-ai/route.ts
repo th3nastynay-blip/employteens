@@ -23,10 +23,28 @@ export async function POST(req: NextRequest) {
     console.error('[AI Coach] DB context error:', dbErr)
   }
 
-  return getStreamingChatResponse(
-    messages as ChatMessage[],
-    ctx.userProfile,
-    ctx.jobContext,
-    { insights: ctx.insights },
-  )
+  // Never let an exception escape as a raw 500 — the chat client reads SSE
+  // and renders a silent empty bubble for anything else. Stream the error.
+  try {
+    return await getStreamingChatResponse(
+      messages as ChatMessage[],
+      ctx.userProfile,
+      ctx.jobContext,
+      { insights: ctx.insights },
+    )
+  } catch (err) {
+    console.error('[AI Coach] streaming setup error:', err)
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        const msg = "Something went wrong on my end — try that again in a second."
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: msg } }] })}\n\n`))
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    })
+    return new Response(stream, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+    })
+  }
 }

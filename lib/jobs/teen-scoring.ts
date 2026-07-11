@@ -168,6 +168,13 @@ export function detectScamRisk(job: ScamScoreInput): number {
   if (text.includes('no experience earn $')) score += 25
   if (text.includes('$500/day') || text.includes('$1000/day')) score += 50
   if (text.includes('mlm') || text.includes('network marketing')) score += 60
+  // Referral-scheme "jobs": the work is recruiting more teens into the same
+  // program (seen live: CampusReel's per-city "14 & 15 year olds needed"
+  // SEO listings, June 2026). The site is the "employer," so the
+  // default-deny destination check can't catch it — the text pattern can.
+  if (/recruit (fellow|other) (students|friends|teens)/.test(text)) score += 50
+  if (text.includes('ambassador program') && /recruit/.test(text)) score += 30
+  if (/\bambassador\b/.test(text) && /social media promotion|word.of.mouth/.test(text)) score += 25
   if (text.includes('commission only')) score += 20
   if (text.includes('send money')) score += 80
   if (text.includes('wire transfer')) score += 80

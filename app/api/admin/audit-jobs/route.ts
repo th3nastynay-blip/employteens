@@ -30,9 +30,11 @@ import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from '@/lib/jobs/q
 
 export const maxDuration = 60
 
-// v2: re-audits everything processed under v1 — the v1 cleaner left trailing
-// comma-locations ("Operations Associate, Bronx,") on ~100 rows.
-const AUDIT_MARK = '_audited:v2'
+// v3: default-deny destination policy (known ATS or employer domain only) —
+// re-audits EVERYTHING, including rows revived by revive-dedupe that carried
+// pre-strict-era "verified" statuses and were never re-checked (that's how a
+// jobilize.com link reached a real user).
+const AUDIT_MARK = '_audited:v3'
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -195,7 +197,7 @@ export async function POST(req: NextRequest) {
       const verification = await verifyJobUrl(
         job.apply_url,
         7000,
-        isProgram ? undefined : { title: job.title, location: job.location },
+        isProgram ? undefined : { title: job.title, location: job.location, company: job.company },
         isProgram ? { programPage: true } : undefined,
       )
 

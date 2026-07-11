@@ -44,6 +44,8 @@ export interface VerificationResult {
 export interface ExpectedJobMeta {
   title?: string
   location?: string
+  /** Employer name — enables the default-deny destination check */
+  company?: string
 }
 
 export interface VerifyOptions {
@@ -132,6 +134,47 @@ export function isAggregatorUrl(url: string): boolean {
   } catch {
     return false
   }
+}
+
+// ── DEFAULT-DENY DESTINATION POLICY ─────────────────────────────────────
+// A blocklist of aggregators has an infinite tail (jobilize.com shipped to a
+// real user before it was on the list). Inverted: a final destination is
+// acceptable ONLY if it is (a) a known applicant-tracking-system domain, or
+// (b) plausibly the employer's own site — a significant token of the company
+// name appears in the hostname. Everything else is rejected as untrusted,
+// no list membership required.
+const TRUSTED_ATS_DOMAINS = [
+  'greenhouse.io', 'lever.co', 'ashbyhq.com', 'smartrecruiters.com',
+  'myworkdayjobs.com', 'workday.com', 'icims.com', 'taleo.net',
+  'applytojob.com', 'breezy.hr', 'bamboohr.com', 'paycomonline.net',
+  'paylocity.com', 'adp.com', 'ultipro.com', 'workstream.us', 'jobvite.com',
+  'oraclecloud.com', 'successfactors.com', 'dayforcehcm.com', 'mchire.com',
+  'harri.com', 'workable.com', 'recruitee.com', 'ripplinghire.com',
+  'gr8people.com', 'eightfold.ai', 'avature.net', 'wd1.myworkdaysite.com',
+]
+
+const COMPANY_STOPWORDS = new Set([
+  'the', 'inc', 'llc', 'corp', 'corporation', 'company', 'group', 'holdings',
+  'restaurant', 'restaurants', 'theatres', 'theaters', 'stores', 'markets',
+  'brands', 'usa', 'and', 'of', 'co', 'ltd', 'dba', 'enterprises',
+])
+
+export function isTrustedDestination(url: string, company: string): boolean {
+  let host = ''
+  try { host = new URL(url).hostname.toLowerCase() } catch { return false }
+
+  if (TRUSTED_ATS_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))) return true
+
+  // Employer-domain heuristic: any company-name token (≥4 chars, not a
+  // stopword) appearing in the hostname. "Sweetgreen" → careers.sweetgreen.com,
+  // "BoxLunch / Hot Topic" → hottopic.com, "City of Jersey City" → jerseycitynj.gov.
+  const tokens = (company ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 4 && !COMPANY_STOPWORDS.has(t))
+  const hostFlat = host.replace(/[^a-z0-9]/g, '')
+  return tokens.some((t) => hostFlat.includes(t))
 }
 
 // Search/browse pages: even on an employer's own domain, a URL whose path or
@@ -367,6 +410,19 @@ export async function verifyJobUrl(
       }
     }
 
+    // DEFAULT-DENY: final destination must be a known ATS or the employer's
+    // own domain. This catches every aggregator ever created, not just the
+    // ones on a list — jobilize.com reached a real user before this existed.
+    if (!opts?.programPage && expected?.company && !isTrustedDestination(finalUrl, expected.company)) {
+      return {
+        status: 'aggregator',
+        http_status: res.status,
+        is_active: false,
+        reason: `Untrusted destination (${(() => { try { return new URL(finalUrl).hostname } catch { return 'unknown' } })()}) — neither a known ATS nor ${expected.company}'s own domain`,
+        final_url: finalUrl,
+      }
+    }
+
     // Search/browse pages are not ONE specific position, even on the
     // employer's own domain.
     if (!opts?.programPage && isSearchPage(finalUrl)) {
@@ -545,7 +601,7 @@ export async function verifyJobUrl(
 // nightly cleanup would silently deactivate every local job the morning
 // after it was ingested.
 export async function verifyBatch(
-  jobs: { id: string; apply_url: string; title?: string; location?: string; programPage?: boolean }[],
+  jobs: { id: string; apply_url: string; title?: string; location?: string; company?: string; programPage?: boolean }[],
   concurrency = 5,
 ): Promise<{ id: string; result: VerificationResult }[]> {
   const results: { id: string; result: VerificationResult }[] = []
@@ -558,7 +614,7 @@ export async function verifyBatch(
       const result = await verifyJobUrl(
         job.apply_url,
         6000,
-        { title: job.title, location: job.location },
+        { title: job.title, location: job.location, company: job.company },
         job.programPage ? { programPage: true } : undefined,
       )
       results.push({ id: job.id, result })

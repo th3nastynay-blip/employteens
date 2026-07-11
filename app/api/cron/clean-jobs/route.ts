@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
         apply_url: j.apply_url,
         title: j.title,
         location: j.location,
+        company: j.company, // enables default-deny destination check
         // Without this, every curated program-page job would be rejected as
         // 'generic' on its first nightly recheck and silently deactivated.
         programPage: j.source === 'local',

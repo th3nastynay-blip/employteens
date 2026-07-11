@@ -40,10 +40,14 @@ export async function GET(req: NextRequest) {
   const failed: { title: string; company: string; url: string; source: string; reason: string; http_status: number | null }[] = []
 
   for (const job of jobs) {
-    const result = await verifyJobUrl(job.apply_url, 8000, {
-      title: job.title,
-      location: job.location,
-    })
+    const result = await verifyJobUrl(
+      job.apply_url,
+      8000,
+      job.source === 'local'
+        ? undefined
+        : { title: job.title, location: job.location, company: job.company },
+      job.source === 'local' ? { programPage: true } : undefined,
+    )
 
     if (result.is_active) {
       passed.push({

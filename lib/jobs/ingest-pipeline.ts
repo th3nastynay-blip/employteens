@@ -204,7 +204,14 @@ export async function ingestNormalizedJobs(
       const verification = await verifyJobUrl(
         raw.apply_url,
         7000,
-        raw.isAggregator ? { title: raw.title, location: raw.location } : undefined,
+        // Company always included → default-deny destination check applies
+        // to every fetched page; title/location content-matching applies to
+        // aggregator-sourced links whose metadata we don't control.
+        raw.isProgramPage
+          ? undefined
+          : raw.isAggregator
+            ? { title: raw.title, location: raw.location, company: raw.company }
+            : { company: raw.company },
         raw.isProgramPage ? { programPage: true } : undefined,
       )
 

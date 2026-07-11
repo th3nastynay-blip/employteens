@@ -75,21 +75,12 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     salary_min: 17,
     activeMonths: [2, 3, 4, 5, 6, 7],
   },
-  {
-    title: 'Theatre Crew',
-    tags: ['Ages 14+', 'Work permit needed', 'Part-time'],
-    company: 'AMC Theatres',
-    location: 'Jersey City, NJ',
-    city: 'Jersey City',
-    state: 'NJ',
-    zip_code: '07310',
-    apply_url: 'https://www.amctheatres.com/careers/in-theatre',
-    description:
-      'AMC states it extends offers to applicants ages 14–17 based on the hours their school work permits allow. Crew roles (concessions, ticketing, ushering) at locations including Newport Centre. NJ working papers required — start yours at MyWorkingPapers.nj.gov before applying.',
-    min_age: 14,
-    job_type: 'part-time',
-    activeMonths: ALL_YEAR,
-  },
+  // REMOVED 2026-07-11: AMC "Theatre Crew" entry pointed at the
+  // amctheatres.com/careers/in-theatre LANDING page, not an exact
+  // application — banned per product direction ("only exact application
+  // links"). Their real ATS (careers.amctheatres.com, Radancy) has specific
+  // posting URLs but they churn per requisition; re-add only as a specific
+  // Hudson-area posting when one exists.
   {
     // Browser-verified 2026-07-10: live Workstream posting, one specific
     // position, Apply button, pay shown. Posting states "at least 16 years

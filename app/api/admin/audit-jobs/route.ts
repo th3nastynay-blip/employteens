@@ -46,6 +46,47 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createAdminClient()
 
+  // REVIVE-DEDUPE MODE: the nightly dedupe used a title|company|state key,
+  // which — after title normalization — collapsed distinct store locations
+  // into one key and deactivated 300+ legitimate jobs as "duplicates".
+  // Those rows kept verification_status='verified' (only status/is_active
+  // were flipped), which distinguishes them from genuinely dead rows.
+  // This mode: (1) reactivates inactive+verified rows, (2) immediately
+  // re-runs dedupe with the corrected title|company|LOCATION key.
+  if (req.nextUrl.searchParams.get('mode') === 'revive-dedupe') {
+    const { count: revived } = await supabase
+      .from('jobs')
+      .update({ status: 'active', is_active: true }, { count: 'exact' })
+      .eq('status', 'inactive')
+      .eq('is_active', false)
+      .eq('verification_status', 'verified')
+
+    const { data: activeJobs } = await supabase
+      .from('jobs')
+      .select('id, title, company, location, verified_at')
+      .eq('status', 'active')
+      .order('verified_at', { ascending: false })
+
+    const seen = new Set<string>()
+    const dupes: string[] = []
+    for (const j of activeJobs ?? []) {
+      const key = `${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}|${String(j.location ?? '').toLowerCase().trim()}`
+      if (seen.has(key)) dupes.push(j.id)
+      else seen.add(key)
+    }
+    if (dupes.length > 0) {
+      await supabase.from('jobs').update({ status: 'inactive', is_active: false }).in('id', dupes)
+    }
+
+    return NextResponse.json({
+      success: true,
+      mode: 'revive-dedupe',
+      revived: revived ?? 0,
+      re_deduplicated: dupes.length,
+      net_restored: (revived ?? 0) - dupes.length,
+    })
+  }
+
   // RECONSIDER MODE: geo false positives ("Belleville, Essex County" is NJ)
   // were flagged before county-form locations were recognized. Walk flagged
   // rows; anything that now passes the cheap gates goes back to active

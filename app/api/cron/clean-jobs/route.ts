@@ -157,9 +157,14 @@ export async function GET(req: NextRequest) {
   results.deactivated_expired = expiredCount ?? 0
 
   // ── 4. Remove in-DB duplicates (keep most recently verified) ─────────────
+  // KEY MUST INCLUDE LOCATION: after title normalization, distinct store
+  // locations share identical clean titles ("Sales Associate" @ BoxLunch),
+  // and a title|company|state key deactivated 300+ legitimate jobs as
+  // "duplicates" in one night. Same title + company + same LOCATION is a
+  // real dupe; same title at different addresses is inventory.
   const { data: activeJobs } = await supabase
     .from('jobs')
-    .select('id, title, company, state, verified_at')
+    .select('id, title, company, state, location, verified_at')
     .eq('status', 'active')
     .order('verified_at', { ascending: false })
 
@@ -168,7 +173,7 @@ export async function GET(req: NextRequest) {
     const toDeactivate: string[] = []
 
     for (const job of activeJobs) {
-      const key = `${job.title.toLowerCase().trim()}|${job.company.toLowerCase().trim()}|${job.state}`
+      const key = `${job.title.toLowerCase().trim()}|${job.company.toLowerCase().trim()}|${String(job.location ?? '').toLowerCase().trim()}`
       if (seen.has(key)) {
         toDeactivate.push(job.id)
       } else {

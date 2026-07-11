@@ -20,7 +20,10 @@ export interface TeenScoreInput {
 }
 
 export const TEEN_FRIENDLY_COMPANIES: Record<string, TeenScoreProfile> = {
-  mcdonald: { teen_friendly_score: 95, hiring_speed_score: 95, min_age: 14 },
+  // Franchise-dependent: some US McDonald's hire at 14, but NJ locations are
+  // predominantly 16+. Conservative floor — a 14-year-old must never be sent
+  // to apply somewhere that won't take them.
+  mcdonald: { teen_friendly_score: 95, hiring_speed_score: 95, min_age: 16 },
   chipotle: { teen_friendly_score: 92, hiring_speed_score: 85, min_age: 16 },
   starbucks: { teen_friendly_score: 90, hiring_speed_score: 70, min_age: 16 },
   target: { teen_friendly_score: 88, hiring_speed_score: 78, min_age: 16 },
@@ -33,7 +36,9 @@ export const TEEN_FRIENDLY_COMPANIES: Record<string, TeenScoreProfile> = {
   'burger king': { teen_friendly_score: 84, hiring_speed_score: 88, min_age: 16 },
   wendy: { teen_friendly_score: 84, hiring_speed_score: 88, min_age: 16 },
   'planet fitness': { teen_friendly_score: 82, hiring_speed_score: 72, min_age: 16 },
-  'chick-fil-a': { teen_friendly_score: 93, hiring_speed_score: 75, min_age: 15 },
+  // NJ CFA franchises state 16+ on their own postings (Newport Centre
+  // confirmed 2026-07-10); 15 is common elsewhere but not verifiable here.
+  'chick-fil-a': { teen_friendly_score: 93, hiring_speed_score: 75, min_age: 16 },
   'five guys': { teen_friendly_score: 88, hiring_speed_score: 88, min_age: 16 },
   sweetgreen: { teen_friendly_score: 86, hiring_speed_score: 75, min_age: 16 },
   walgreen: { teen_friendly_score: 82, hiring_speed_score: 73, min_age: 16 },

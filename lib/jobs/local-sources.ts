@@ -90,6 +90,24 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     job_type: 'part-time',
     activeMonths: ALL_YEAR,
   },
+  {
+    // Browser-verified 2026-07-10: live Workstream posting, one specific
+    // position, Apply button, pay shown. Posting states "at least 16 years
+    // of age" (kitchen roles at this franchise are 18+).
+    title: 'Front of House Team Member',
+    tags: ['Hiring now', 'Part-time', '$15.95–17/hr', 'Closed Sundays'],
+    company: 'Chick-fil-A Newport Centre',
+    location: 'Jersey City, NJ',
+    city: 'Jersey City',
+    state: 'NJ',
+    zip_code: '07310',
+    apply_url: 'https://www.workstream.us/j/bf79ff6f/chick-fil-a/jersey-city-68721/front-of-house-team-member-cc8373ae?locale=en',
+    description:
+      'Front-of-house at Chick-fil-A Newport Centre (30 Mall Dr W): taking orders, serving guests, keeping the dining area sharp. $15.95–17/hr, flexible scheduling, closed Sundays, scholarship opportunities up to $2,500/year. Must be 16 by hire date.',
+    min_age: 16,
+    job_type: 'part-time',
+    activeMonths: ALL_YEAR,
+  },
   // ── Bayonne ────────────────────────────────────────────────────────────
   {
     title: 'Camp Counselor',

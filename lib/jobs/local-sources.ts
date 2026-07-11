@@ -78,9 +78,29 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
   // REMOVED 2026-07-11: AMC "Theatre Crew" entry pointed at the
   // amctheatres.com/careers/in-theatre LANDING page, not an exact
   // application — banned per product direction ("only exact application
-  // links"). Their real ATS (careers.amctheatres.com, Radancy) has specific
-  // posting URLs but they churn per requisition; re-add only as a specific
-  // Hudson-area posting when one exists.
+  // links"). Replaced with the specific Clifton Commons posting below.
+  {
+    // Browser-verified 2026-07-11: EXACT posting on AMC's own careers site,
+    // "Apply for this position" button, "Must be at least 14 years of age"
+    // stated in the posting text, $15.92–16.42/hr, posted 07/10/2026.
+    // Clifton is Passaic County (adjacent to Hudson, ~6 mi from North
+    // Bergen) — the only verifiable exact-link 14+ posting found in-market.
+    // Requisition URLs churn: when this closes, the nightly re-check will
+    // deactivate it automatically.
+    title: 'Theatre Crew',
+    tags: ['Ages 14+', 'No experience needed', '$15.92–16.42/hr', 'Hiring now'],
+    company: 'AMC Theatres',
+    location: 'Clifton, NJ',
+    city: 'Clifton',
+    state: 'NJ',
+    zip_code: '07014',
+    apply_url: 'https://careers.amctheatres.com/crew/job/P1-2025323-14',
+    description:
+      'Crew at AMC Clifton Commons 16 (405 State Rt 3): tickets, concessions, ushering — cross-trained across all of it. $15.92–16.42/hr, free movies at any AMC nationwide, daily free popcorn, flexible scheduling. The posting states a minimum age of 14 — NJ working papers required (MyWorkingPapers.nj.gov).',
+    min_age: 14,
+    job_type: 'part-time',
+    activeMonths: ALL_YEAR,
+  },
   {
     // Browser-verified 2026-07-10: live Workstream posting, one specific
     // position, Apply button, pay shown. Posting states "at least 16 years

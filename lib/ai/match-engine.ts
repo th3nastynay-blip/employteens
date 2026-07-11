@@ -75,6 +75,7 @@ const ZIP_CENTROIDS: Record<string, [number, number]> = {
   '07201': [40.664, -74.211], // Elizabeth
   '07501': [40.916, -74.172], // Paterson
   '07011': [40.879, -74.140], // Clifton
+  '07014': [40.831, -74.135], // Clifton (Route 3 / Clifton Commons)
   '07601': [40.886, -74.045], // Hackensack
   '07024': [40.851, -73.971], // Fort Lee
   '07020': [40.827, -73.974], // Edgewater

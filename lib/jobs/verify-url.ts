@@ -222,6 +222,11 @@ const SPECIFIC_JOB_PATTERNS: RegExp[] = [
   /ashbyhq\.com.*\/[a-f0-9-]{36}/i,        // Ashby UUID
   /smartrecruiters\.com\/[^/]+\/\d{5,}/i,  // SmartRecruiters: /{company}/{numeric-id}-{slug}
   /linkedin\.com\/jobs\/view\/[a-z0-9%-]+-\d{6,}/i, // LinkedIn: /jobs/view/{slug}-{long numeric id}
+  // JazzHR: {company}.applytojob.com/apply/{id}/{slug} — SMB standard.
+  // A real deli's front-of-house posting was false-rejected without this.
+  /applytojob\.com\/apply\/[A-Za-z0-9]{6,}/i,
+  /\/details\/[a-z0-9-]{10,}/i,             // white-label ATS detail pages with unique hash ids
+  /workstream\.us\/j\/[a-z0-9]{6,}\/[^/]+\/[^/]+\/[a-z0-9-]+/i, // Workstream specific position
 ]
 
 // Phrases that indicate a posting is no longer accepting applications, even

@@ -52,6 +52,21 @@ const QUERIES = [
   { text: 'restaurant team member jobs in New York, NY', state: 'NY' },
 ]
 
+// Manual backfill (?backfill=1): wider city net + month-long window for a
+// one-time haul. NOT for the daily cron — costs 10 extra quota requests.
+const BACKFILL_QUERIES = [
+  { text: 'restaurant cashier server jobs in Weehawken, NJ', state: 'NJ' },
+  { text: 'cafe deli team member jobs in Secaucus, NJ', state: 'NJ' },
+  { text: 'restaurant retail jobs in Kearny, NJ', state: 'NJ' },
+  { text: 'ice cream cafe bakery jobs in Jersey City, NJ', state: 'NJ' },
+  { text: 'smoothie juice bar cashier jobs in Hoboken, NJ', state: 'NJ' },
+  { text: 'restaurant crew jobs in Newark, NJ', state: 'NJ' },
+  { text: 'bakery cafe counter jobs in Brooklyn, NY', state: 'NY' },
+  { text: 'pizzeria counter cashier jobs in Queens, NY', state: 'NY' },
+  { text: 'boba tea shop barista jobs in New York, NY', state: 'NY' },
+  { text: 'deli sandwich shop jobs in Manhattan, NY', state: 'NY' },
+]
+
 interface JSearchApplyOption {
   publisher?: string
   apply_link?: string
@@ -96,12 +111,12 @@ function pickTrustedApplyLink(r: JSearchResult): string | null {
   return null
 }
 
-async function fetchJSearchPage(apiKey: string, query: string): Promise<JSearchResult[]> {
+async function fetchJSearchPage(apiKey: string, query: string, datePosted: string): Promise<JSearchResult[]> {
   const url = new URL('https://jsearch.p.rapidapi.com/search-v2')
   url.searchParams.set('query', query)
   url.searchParams.set('num_pages', '1')
   url.searchParams.set('country', 'us')
-  url.searchParams.set('date_posted', 'week')
+  url.searchParams.set('date_posted', datePosted)
 
   const res = await fetch(url.toString(), {
     headers: {
@@ -144,14 +159,16 @@ export async function POST(req: NextRequest) {
   // before verification even starts, which is exactly what caused a
   // FUNCTION_INVOCATION_TIMEOUT in production. Running them concurrently
   // instead keeps total wall time close to one request's latency, not six.
-  const queue = [...QUERIES]
+  const backfill = req.nextUrl.searchParams.get('backfill') === '1'
+  const datePosted = backfill ? 'month' : 'week'
+  const queue = backfill ? [...QUERIES, ...BACKFILL_QUERIES] : [...QUERIES]
 
   async function fetchWorker() {
     while (queue.length > 0) {
       const q = queue.shift()
       if (!q) break
       try {
-        const results = await fetchJSearchPage(verifiedApiKey, q.text)
+        const results = await fetchJSearchPage(verifiedApiKey, q.text, datePosted)
         for (const r of results) {
           if (!r.job_title || !r.employer_name) continue
 

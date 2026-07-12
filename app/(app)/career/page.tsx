@@ -170,6 +170,44 @@ export default function CareerPage() {
       .catch(() => { /* chips just don't render */ })
   }, [])
 
+  // ── Conversation persistence (tab-scoped) ──
+  // sessionStorage survives in-app navigation and refreshes but clears when
+  // the tab closes — users can bounce to the feed and come back mid-convo.
+  // Restored in an effect (not a lazy initializer) to avoid SSR hydration
+  // mismatch.
+  const CHAT_KEY = 'et-coach-chat'
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(CHAT_KEY)
+      if (raw) {
+        const saved = JSON.parse(raw) as Message[]
+        if (Array.isArray(saved) && saved.length > 0) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setMessages(saved.map((m) => ({ ...m, streaming: false })))
+        }
+      }
+    } catch { /* corrupt storage — start fresh */ }
+  }, [])
+
+  useEffect(() => {
+    // Don't thrash storage on every streamed token — save only once the
+    // stream settles (no message mid-flight).
+    if (messages.some((m) => m.streaming)) return
+    try {
+      if (messages.length > 0) {
+        sessionStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-60)))
+      } else {
+        sessionStorage.removeItem(CHAT_KEY)
+      }
+    } catch { /* storage full/unavailable — chat still works, just won't persist */ }
+  }, [messages])
+
+  function clearChat() {
+    abortRef.current?.abort()
+    setMessages([])
+    try { sessionStorage.removeItem(CHAT_KEY) } catch { /* noop */ }
+  }
+
   function scrollToBottom(smooth = true) {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
   }
@@ -207,7 +245,9 @@ export default function CareerPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+          // Last 20 turns is plenty of context — restored sessions can grow
+          // long and the full history would bloat the prompt for no gain
+          messages: updatedMessages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
         }),
         signal: abortRef.current.signal,
       })
@@ -296,7 +336,7 @@ export default function CareerPage() {
       >
         <div className="flex items-center gap-3">
           <LogoMark size={32} />
-          <div>
+          <div className="flex-1">
             <h1 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--et-ink)', letterSpacing: '-0.01em' }}>
               AI Coach
             </h1>
@@ -307,6 +347,18 @@ export default function CareerPage() {
               </p>
             </div>
           </div>
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              style={{
+                fontSize: '12px', fontWeight: 600, color: 'var(--et-muted)',
+                background: 'var(--et-surface)', border: '1px solid var(--et-border-mid)',
+                borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
+              }}
+            >
+              New chat
+            </button>
+          )}
         </div>
       </div>
 

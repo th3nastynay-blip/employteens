@@ -76,6 +76,8 @@ export interface ProgramWindow {
   /** First month of the application window, 1–12 */
   opensMonth: number
   monthLabel: string
+  /** Months (1–12) the program is live on the platform */
+  activeMonths: number[]
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -97,6 +99,7 @@ export function getProgramCalendar(): ProgramWindow[] {
         min_age: e.min_age,
         opensMonth,
         monthLabel: MONTHS[opensMonth - 1],
+        activeMonths: e.activeMonths,
       }
     })
     .sort((a, b) => a.opensMonth - b.opensMonth)

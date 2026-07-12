@@ -91,7 +91,11 @@ export function GetReadyMode({ age }: { age: number }) {
           <p className="section-label mb-2">City programs that hire at 15 — application windows</p>
           <div className="card-elevated overflow-hidden">
             {programs.map((p, i) => {
-              const isOpen = currentMonth >= p.opensMonth
+              // In the window = the listing is ALREADY in their feed (the
+              // ingest activates/deactivates by these same months). Past
+              // start-month but outside the window means it's over for the
+              // year — say when it comes back, never point at nothing.
+              const isOpen = p.activeMonths.includes(currentMonth)
               return (
                 <div
                   key={`${p.company}-${p.title}`}
@@ -110,14 +114,14 @@ export function GetReadyMode({ age }: { age: number }) {
                       color: isOpen ? 'var(--et-green)' : 'var(--et-muted)',
                     }}
                   >
-                    {isOpen ? 'Window open — check listing' : `Opens ${p.monthLabel}`}
+                    {isOpen ? 'In your feed now ↓' : `Opens ${p.monthLabel}`}
                   </span>
                 </div>
               )
             })}
           </div>
           <p style={{ fontSize: '11.5px', color: 'var(--et-placeholder)', marginTop: 6, paddingLeft: 2 }}>
-            These appear in your feed automatically when their windows open.
+            No searching needed — each one appears in your feed below the moment its window opens.
           </p>
         </div>
       )}

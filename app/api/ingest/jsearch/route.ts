@@ -32,27 +32,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { ingestNormalizedJobs, type NormalizedJob } from '@/lib/jobs/ingest-pipeline'
+import { isTrustedDestination } from '@/lib/jobs/verify-url'
 
 // Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
 export const maxDuration = 60
 
 // Keep this list short — each entry costs one request against JSearch's quota.
-// Rebalanced toward Hudson County (launch market): 4 of 6 queries target
-// Hudson cities directly, 2 keep NY presence. Same quota cost as before.
+// SMB-focused 2026-07-12: Google Jobs indexes the ATSs small businesses
+// actually use (Workstream, Harri, McHire, Homebase) — these queries target
+// the restaurant/shop roles where SMBs hire teens, Hudson County first.
 const QUERIES = [
-  { text: 'part time cashier jobs in Jersey City, NJ', state: 'NJ' },
-  { text: 'crew member jobs in Jersey City, NJ', state: 'NJ' },
-  { text: 'part time jobs for high school students in Hoboken, NJ', state: 'NJ' },
-  { text: 'team member jobs in Bayonne, NJ', state: 'NJ' },
-  { text: 'cashier jobs in New York, NY', state: 'NY' },
-  { text: 'crew member jobs in New York, NY', state: 'NY' },
+  { text: 'restaurant crew team member jobs in Jersey City, NJ', state: 'NJ' },
+  { text: 'ice cream frozen yogurt shop jobs in Hoboken, NJ', state: 'NJ' },
+  { text: 'barista cafe coffee shop jobs in Jersey City, NJ', state: 'NJ' },
+  { text: 'bagel shop deli jobs in North Bergen, NJ', state: 'NJ' },
+  { text: 'pizzeria restaurant jobs in Union City, NJ', state: 'NJ' },
+  { text: 'part time cashier jobs in Bayonne, NJ', state: 'NJ' },
+  { text: 'juice bar smoothie shop jobs in New York, NY', state: 'NY' },
+  { text: 'restaurant team member jobs in New York, NY', state: 'NY' },
 ]
+
+interface JSearchApplyOption {
+  publisher?: string
+  apply_link?: string
+  is_direct?: boolean
+}
 
 interface JSearchResult {
   job_id?: string
   job_title?: string
   employer_name?: string
   job_apply_link?: string
+  /** Alternative apply destinations — often includes the DIRECT employer/ATS link */
+  apply_options?: JSearchApplyOption[]
   job_description?: string
   job_city?: string
   job_state?: string
@@ -60,6 +72,28 @@ interface JSearchResult {
   job_employment_type?: string
   job_min_salary?: number | null
   job_max_salary?: number | null
+}
+
+/**
+ * Google Jobs postings list every place a job can be applied to. Most are
+ * aggregators (LinkedIn, ZipRecruiter) that our rules reject — but SMB
+ * postings routinely include the employer's own ATS link (Workstream,
+ * Harri, McHire, Homebase) in apply_options. Picking the first TRUSTED
+ * destination instead of blindly taking job_apply_link turns JSearch from
+ * 90% rejects into a small-business discovery engine.
+ */
+function pickTrustedApplyLink(r: JSearchResult): string | null {
+  const company = r.employer_name ?? ''
+  const candidates = [
+    ...(r.apply_options ?? []).filter((o) => o.is_direct).map((o) => o.apply_link),
+    r.job_apply_link,
+    ...(r.apply_options ?? []).filter((o) => !o.is_direct).map((o) => o.apply_link),
+  ].filter((u): u is string => !!u)
+
+  for (const url of candidates) {
+    if (isTrustedDestination(url, company)) return url
+  }
+  return null
 }
 
 async function fetchJSearchPage(apiKey: string, query: string): Promise<JSearchResult[]> {
@@ -103,6 +137,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createAdminClient()
   const rawResults: NormalizedJob[] = []
+  let skippedNoDirectLink = 0
 
   // JSearch's own reported latency is ~10 seconds PER REQUEST (visible on its
   // RapidAPI console) — 6 queries run sequentially would be ~60s on their own,
@@ -118,7 +153,16 @@ export async function POST(req: NextRequest) {
       try {
         const results = await fetchJSearchPage(verifiedApiKey, q.text)
         for (const r of results) {
-          if (!r.job_apply_link || !r.job_title || !r.employer_name) continue
+          if (!r.job_title || !r.employer_name) continue
+
+          // Only ingest postings with a trusted direct destination — saves
+          // the verification budget for links that can actually pass.
+          const applyUrl = pickTrustedApplyLink(r)
+          if (!applyUrl) {
+            skippedNoDirectLink++
+            continue
+          }
+
           // job_state is a full name ("Illinois"), not our two-letter format —
           // use it only for the human-readable location string, never for `state`
           const location = [r.job_city, r.job_state].filter(Boolean).join(', ')
@@ -128,12 +172,14 @@ export async function POST(req: NextRequest) {
             company: r.employer_name,
             location: location || q.state,
             state: q.state,
-            apply_url: r.job_apply_link,
+            apply_url: applyUrl,
             description: r.job_description ?? '',
             posted_at: r.job_posted_at_datetime_utc,
             job_type: r.job_employment_type,
             salary_min: r.job_min_salary ?? undefined,
             salary_max: r.job_max_salary ?? undefined,
+            // Metadata comes from Google's index, not the destination page —
+            // keep content-matching on
             isAggregator: true,
           })
         }
@@ -147,7 +193,7 @@ export async function POST(req: NextRequest) {
 
   const stats = await ingestNormalizedJobs(supabase, 'jsearch', rawResults)
 
-  return NextResponse.json({ success: true, ...stats })
+  return NextResponse.json({ success: true, skipped_no_direct_link: skippedNoDirectLink, ...stats })
 }
 
 export async function GET(req: NextRequest) {

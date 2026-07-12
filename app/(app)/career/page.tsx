@@ -315,6 +315,26 @@ export default function CareerPage() {
     }
   }, [input, messages, isStreaming])
 
+  // ── Deep-link prompts (?ask=...) ──
+  // Get Ready mode gig cards land here with a tailored prompt. Read from
+  // window.location (not useSearchParams — avoids the Suspense boundary
+  // requirement), send once, then scrub the URL so refresh doesn't re-send.
+  const askSentRef = useRef(false)
+  useEffect(() => {
+    if (askSentRef.current) return
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const ask = params.get('ask')
+      if (ask && ask.trim()) {
+        askSentRef.current = true
+        window.history.replaceState({}, '', '/career')
+        // Defer one tick so restored-session state settles first
+        setTimeout(() => sendMessage(ask.trim()), 50)
+      }
+    } catch { /* no deep link — normal page load */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()

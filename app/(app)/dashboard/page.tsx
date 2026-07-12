@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { FeedSection } from '@/components/jobs/FeedSection'
+import { GetReadyMode } from '@/components/dashboard/GetReadyMode'
 import { computeMatchScore } from '@/lib/ai/match-engine'
 import type { JobMatch, UserProfile, JobRow } from '@/lib/types/database'
 
@@ -23,6 +24,7 @@ const SCAN_STATES = [
 
 export default function DashboardPage() {
   const [userName, setUserName] = useState('')
+  const [userAge, setUserAge] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<FeedTab>('best_matches')
   const [savedJobs, setSavedJobs] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -63,6 +65,9 @@ export default function DashboardPage() {
 
     if (profileRes.data?.name) {
       setUserName(profileRes.data.name.split(' ')[0])
+    }
+    if (profileRes.data?.age) {
+      setUserAge(profileRes.data.age)
     }
 
     if (applicationsRes.data) {
@@ -268,6 +273,11 @@ export default function DashboardPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ── Get Ready mode: honest experience for 14–15 year olds ── */}
+      {!isLoading && userAge !== null && userAge <= 15 && (
+        <GetReadyMode age={userAge} />
+      )}
 
       {/* ── Tab bar ── */}
       <div

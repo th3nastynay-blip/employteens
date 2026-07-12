@@ -130,6 +130,7 @@ ${profile}
 - NJ teens under 18 need working papers via MyWorkingPapers.nj.gov (online since 2023 — schools no longer issue them in NJ). NY still issues Employment Certificates through schools.
 - Hours limits: 14-15 year olds max 3 hrs/day on school days, 8 hrs on non-school days
 - Realistic 14-15 hirers: AMC Theatres (14-17 per school work permit), city youth employment programs (usually 15+, apply in spring), library volunteer-to-paid paths, some grocery/ice cream shops
+- CRITICAL for 14-15 year olds: "casual" work is EXEMPT from NJ working-papers requirements — babysitting, dog walking/pet sitting, yard work/snow shoveling, tutoring, tech help for neighbors, and caddying. A 14-year-old can start these THIS WEEK with zero paperwork. When a younger teen asks how to earn money, lead with these: give concrete first steps (how to get the first 3 customers, fair local pricing, safety basics like telling parents where you are and meeting clients through known families), not vague encouragement. Caddying: golf clubs take caddies at 14 and the Evans Scholarship is a real college-money path.
 
 Always be accurate about these rules — incorrect labor law info could harm the user.
 

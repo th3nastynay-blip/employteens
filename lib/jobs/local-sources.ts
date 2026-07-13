@@ -33,7 +33,7 @@ export interface LocalSourceEntry {
   company: string
   location: string
   city: string
-  state: 'NJ'
+  state: 'NJ' | 'NY'
   zip_code: string
   apply_url: string
   description: string
@@ -101,6 +101,29 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     min_age: 16,
     job_type: 'part-time',
     activeMonths: ALL_YEAR,
+  },
+  // ── Rye, NY (in-market: one of the ONLY true 14+ employers) ───────────
+  {
+    // Browser-verified 2026-07-13: Westchester County Parks official hiring
+    // page. Playland hires at 14 (parent/guardian co-signs under 18),
+    // $17.10-20/hr — ride attendants, games, cashiers, custodial. July
+    // check: "no longer accepting applications" for this season, so the
+    // window below keeps it OFF the feed until spring hiring reopens; it
+    // shows in the Get Ready calendar as "Opens February" meanwhile.
+    title: 'Amusement Park Crew',
+    tags: ['Ages 14+', 'Seasonal', '$17.10–20/hr', 'County program'],
+    company: 'Playland Park (Westchester County)',
+    location: 'Rye, NY',
+    city: 'Rye',
+    state: 'NY',
+    zip_code: '10580',
+    apply_url: 'https://parks.westchestercountyny.gov/job-opportunities',
+    description:
+      'Westchester County\'s Playland Park in Rye hires at 14 — ride attendants, games, cashiers, and more at $17.10–20/hr. Applications open in late winter (job fair in March, first 150 online applicants get guaranteed interviews) and close when staffed. A parent or guardian co-signs if you\'re under 18.',
+    min_age: 14,
+    job_type: 'seasonal',
+    salary_min: 17,
+    activeMonths: [2, 3, 4, 5, 6],
   },
   // ── Bayonne ────────────────────────────────────────────────────────────
   {

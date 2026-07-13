@@ -87,6 +87,7 @@ const ZIP_CENTROIDS: Record<string, [number, number]> = {
   '10451': [40.820, -73.925], // South Bronx
   '10301': [40.631, -74.094], // Staten Island
   '10701': [40.940, -73.880], // Yonkers
+  '10580': [40.981, -73.684], // Rye (Playland)
 }
 
 function haversineMiles(a: [number, number], b: [number, number]): number {

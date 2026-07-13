@@ -76,17 +76,25 @@ interface WorkdayPosting {
 
 async function fetchTenantJobs(t: WorkdayTenant, searchText: string): Promise<WorkdayPosting[]> {
   const url = `https://${t.tenant}.${t.wd}.myworkdayjobs.com/wday/cxs/${t.tenant}/${t.site}/jobs`
+  const all: WorkdayPosting[] = []
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ appliedFacets: {}, limit: 20, offset: 0, searchText }),
-    })
-    if (!res.ok) return []
-    const data = await res.json()
-    return data?.jobPostings ?? []
+    // Workday CXS caps at 20/request — paginate 3 pages so large tenants
+    // (Wegmans metro = the biggest 15+ source) aren't truncated.
+    for (const offset of [0, 20, 40]) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ appliedFacets: {}, limit: 20, offset, searchText }),
+      })
+      if (!res.ok) break
+      const data = await res.json()
+      const page: WorkdayPosting[] = data?.jobPostings ?? []
+      all.push(...page)
+      if (page.length < 20) break // last page
+    }
+    return all
   } catch {
-    return []
+    return all
   }
 }
 

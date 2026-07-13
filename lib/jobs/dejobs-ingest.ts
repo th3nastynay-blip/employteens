@@ -63,15 +63,20 @@ async function fetchIndexPage(stateSlug: string, page: number): Promise<string> 
 function parseIndex(html: string, state: 'NJ' | 'NY'): DejobsCandidate[] {
   const out: DejobsCandidate[] = []
   // Job links look like: href="/bayonne-nj/crew-team-member/4004ABCD.../job/"
-  const re = /href="\/([a-z0-9-]+)\/([a-z0-9-]+)\/([A-F0-9]{16,})\/job\/"[^>]*>([^<]{3,120})</gi
+  // Anchor CONTENT is nested markup (heading > spans), so the title is
+  // derived from the URL slug instead — the slug IS the title.
+  const re = /href="\/([a-z0-9-]+)\/([a-z0-9-]+)\/([A-F0-9]{16,})\/job\/"/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(html)) !== null) {
-    const [, citySlug, , , rawTitle] = m
-    const title = rawTitle.trim()
+    const [, citySlug, titleSlug, hexId] = m
+    const title = titleSlug
+      .split('-')
+      .map((w) => (/^\d+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+      .join(' ')
     if (!title) continue
     out.push({
       title,
-      url: `https://mcdonalds.dejobs.org/${m[1]}/${m[2]}/${m[3]}/job/`,
+      url: `https://mcdonalds.dejobs.org/${citySlug}/${titleSlug}/${hexId}/job/`,
       citySlug,
       state,
     })
@@ -81,11 +86,13 @@ function parseIndex(html: string, state: 'NJ' | 'NY'): DejobsCandidate[] {
 
 export async function runDejobsIngest(supabase: SupabaseClient<Database>) {
   const candidates: DejobsCandidate[] = []
+  let pagesFetched = 0
 
   for (const sp of STATE_PAGES) {
     for (let page = 1; page <= sp.pages; page++) {
       const html = await fetchIndexPage(sp.slug, page)
       if (!html) break
+      pagesFetched++
       candidates.push(...parseIndex(html, sp.state))
     }
   }
@@ -124,5 +131,6 @@ export async function runDejobsIngest(supabase: SupabaseClient<Database>) {
     })
   }
 
-  return ingestNormalizedJobs(supabase, 'dejobs', normalized)
+  const stats = await ingestNormalizedJobs(supabase, 'dejobs', normalized)
+  return { ...stats, index_pages_fetched: pagesFetched, candidates_found: candidates.length }
 }

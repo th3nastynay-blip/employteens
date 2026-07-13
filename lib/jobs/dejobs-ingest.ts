@@ -62,10 +62,12 @@ async function fetchIndexPage(stateSlug: string, page: number): Promise<string> 
 
 function parseIndex(html: string, state: 'NJ' | 'NY'): DejobsCandidate[] {
   const out: DejobsCandidate[] = []
-  // Job links look like: href="/bayonne-nj/crew-team-member/4004ABCD.../job/"
-  // Anchor CONTENT is nested markup (heading > spans), so the title is
-  // derived from the URL slug instead — the slug IS the title.
-  const re = /href="\/([a-z0-9-]+)\/([a-z0-9-]+)\/([A-F0-9]{16,})\/job\/"/gi
+  // Job paths look like: /bayonne-nj/crew-team-member/4004ABCD.../job/
+  // The raw HTML may carry them as plain hrefs OR JSON-escaped inside a
+  // script block (\/bayonne-nj\/...): tolerate an optional backslash before
+  // each slash and match the path anywhere. Title derives from the slug —
+  // anchor content is nested markup, so text capture is unreliable.
+  const re = /\\?\/([a-z0-9-]{3,})\\?\/([a-z0-9-]{3,})\\?\/([A-F0-9]{16,})\\?\/job\\?\//gi
   let m: RegExpExecArray | null
   while ((m = re.exec(html)) !== null) {
     const [, citySlug, titleSlug, hexId] = m

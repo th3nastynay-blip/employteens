@@ -17,7 +17,6 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { verifyBatch, isGenericCareerPage } from '@/lib/jobs/verify-url'
 import { runLocalIngest } from '@/lib/jobs/local-ingest'
 import { runWorkdayIngest } from '@/lib/jobs/workday-ingest'
-import { runDejobsIngest } from '@/lib/jobs/dejobs-ingest'
 
 // Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
 export const maxDuration = 60
@@ -72,14 +71,12 @@ export async function GET(req: NextRequest) {
     console.log('[cron/clean-jobs] workday ingest failed (continuing cleanup):', String(err).slice(0, 200))
   }
 
-  // ── 0.6. McDonald's DirectEmployers ingestion (same scheduling constraint) ──
-  try {
-    const dj = await runDejobsIngest(supabase)
-    results.dejobs_verified = dj.verified
-    results.dejobs_inserted = dj.inserted
-  } catch (err) {
-    console.log('[cron/clean-jobs] dejobs ingest failed (continuing cleanup):', String(err).slice(0, 200))
-  }
+  // dejobs (McDonald's DirectEmployers) ingestion REMOVED from the daily
+  // run 2026-07-13: the site serves a JS shell to server fetches — the job
+  // list AND posting pages are client-rendered, so dead postings could
+  // never be detected server-side. A source we can't monitor for death
+  // violates the expired-link guarantee. Route kept for future use if
+  // their JSON API is identified.
 
   // ── 1. Re-verify the oldest-checked active jobs ────────────────────────
   const { data: jobsToCheck } = await supabase

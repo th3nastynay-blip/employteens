@@ -40,7 +40,9 @@ const TENANTS: WorkdayTenant[] = [
     // Confirmed live: wegmans.wd1.myworkdayjobs.com/Wegmans
     // Wegmans hires at 15 for many store roles — rare and valuable.
     tenant: 'wegmans', wd: 'wd1', site: 'Wegmans', name: 'Wegmans', min_age: 15,
-    searchTexts: ['New Jersey', 'Brooklyn'],
+    // Wegmans hires at 15 — the single biggest 15+ source we have. Widened
+    // 2026-07-13 to every store area reachable from the NYC/NJ metro.
+    searchTexts: ['New Jersey', 'Brooklyn', 'Manhattan', 'Yonkers NY', 'Harrison NY', 'White Plains NY'],
   },
   {
     // Confirmed live: fivebelow.wd1.myworkdayjobs.com/fivebelowcareers
@@ -100,13 +102,25 @@ export async function runWorkdayIngest(supabase: SupabaseClient<Database>) {
         // Workday searchText is fuzzy — enforce market geo ourselves
         if (!isInMarket(location)) continue
 
+        // Per-title age guard: a tenant-level min_age of 15 (Wegmans) is
+        // right for cashier/service roles, but overnight, alcohol-adjacent,
+        // and heavy-equipment roles are 18+ regardless of company policy —
+        // a 15-year-old must never be routed to one.
+        let minAge = t.min_age
+        if (/(overnight|liquor|alcohol|wine|beer|bartend|forklift|warehouse|distribution|driver|asset protection|security)/i.test(p.title)) {
+          minAge = Math.max(minAge, 18)
+        } else if (/(meat|seafood|deli|bakery|prep cook|line cook|slicer)/i.test(p.title)) {
+          // Power-equipment-adjacent food roles: NJ/NY restrict under-16s
+          minAge = Math.max(minAge, 16)
+        }
+
         rawResults.push({
           title: p.title,
           company: t.name,
           location,
           apply_url: `https://${t.tenant}.${t.wd}.myworkdayjobs.com/en-US/${t.site}${p.externalPath}`,
           description: (p.bulletFields ?? []).join(' · '),
-          min_age: t.min_age,
+          min_age: minAge,
           posted_at: undefined, // Workday returns "Posted N Days Ago" text, not a date — leave unset rather than guess
           isAggregator: false,
         })

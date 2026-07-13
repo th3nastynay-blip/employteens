@@ -69,6 +69,10 @@ export async function runLocalIngest(supabase: SupabaseClient<Database>) {
     isProgramPage: true,
   }))
 
-  const stats = await ingestNormalizedJobs(supabase, 'local', normalized)
+  // alwaysVerify: directory entries are re-verified EVERY run — the static
+  // directory re-offering a URL is not a liveness signal (unlike an API
+  // feed), and Pass-0's last_checked_at bump was starving the nightly
+  // recheck queue, leaving a 404'd posting live for days.
+  const stats = await ingestNormalizedJobs(supabase, 'local', normalized, { alwaysVerify: true })
   return { ...stats, deactivated_out_of_season }
 }

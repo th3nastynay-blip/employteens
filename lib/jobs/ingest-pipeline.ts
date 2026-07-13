@@ -86,10 +86,24 @@ function inferState(location: string, fallback?: string): string {
   return fallback ?? 'NY'
 }
 
+export interface IngestOptions {
+  /**
+   * Skip the Pass-0 known-URL shortcut and verify EVERY job, every run.
+   * REQUIRED for the curated local directory: its daily ingest was bumping
+   * last_checked_at via Pass-0 without verifying, which pushed directory
+   * rows to the back of clean-jobs' oldest-first recheck queue forever — a
+   * 404'd AMC posting stayed live for days. API sources keep Pass-0 (their
+   * feed re-offering a URL is itself a liveness signal; a static config
+   * file re-offering one is not).
+   */
+  alwaysVerify?: boolean
+}
+
 export async function ingestNormalizedJobs(
   supabase: SupabaseClient<Database>,
   source: string,
   rawJobs: NormalizedJob[],
+  options?: IngestOptions,
 ): Promise<IngestStats> {
   const runStartedAt = new Date().toISOString()
   const stats: IngestStats = {
@@ -136,7 +150,7 @@ export async function ingestNormalizedJobs(
   const knownIds: string[] = []
   const knownUrls = new Set<string>()
   const CHUNK = 200
-  const uniqueUrls = unique.map((j) => j.apply_url)
+  const uniqueUrls = options?.alwaysVerify ? [] : unique.map((j) => j.apply_url)
   for (let i = 0; i < uniqueUrls.length; i += CHUNK) {
     // Only ACTIVE rows are skippable. An inactive known URL falls through to
     // verification — if it passes, the update path below resurrects it
@@ -164,6 +178,10 @@ export async function ingestNormalizedJobs(
   // before this was parallelized.
   const VERIFY_CONCURRENCY = 8
   const verifiedJobs: { raw: NormalizedJob; finalUrl: string; httpStatus: number | null }[] = []
+  // alwaysVerify mode: URLs that FAIL verification must also deactivate any
+  // existing live row (the whole point is catching directory entries whose
+  // pages died — rejection without deactivation would leave them live).
+  const failedUrls: string[] = []
   const queue = [...toVerify]
 
   async function verifyWorker() {
@@ -236,6 +254,7 @@ export async function ingestNormalizedJobs(
       if (!verification.is_active) {
         stats.rejected_url++
         noteRejection(raw.apply_url, verification.status, `HTTP ${verification.http_status ?? '—'}: ${verification.reason}`)
+        if (options?.alwaysVerify) failedUrls.push(raw.apply_url)
         continue
       }
 
@@ -407,6 +426,15 @@ export async function ingestNormalizedJobs(
         }
       }
     }
+  }
+
+  // alwaysVerify: deactivate live rows whose URLs just failed verification
+  if (failedUrls.length > 0) {
+    await supabase
+      .from('jobs')
+      .update({ status: 'inactive', is_active: false, verification_status: 'not_found' })
+      .eq('status', 'active')
+      .in('apply_url', failedUrls)
   }
 
   // Durable log row — non-critical, best-effort like the rest of this codebase's

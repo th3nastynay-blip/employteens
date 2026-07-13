@@ -227,6 +227,7 @@ const SPECIFIC_JOB_PATTERNS: RegExp[] = [
   /applytojob\.com\/apply\/[A-Za-z0-9]{6,}/i,
   /\/details\/[a-z0-9-]{10,}/i,             // white-label ATS detail pages with unique hash ids
   /workstream\.us\/j\/[a-z0-9]{6,}\/[^/]+\/[^/]+\/[a-z0-9-]+/i, // Workstream specific position
+  /\/[A-F0-9]{16,}\/job\/?$/i,              // DirectEmployers (dejobs.org): /{city}/{slug}/{hex}/job/
 ]
 
 // Phrases that indicate a posting is no longer accepting applications, even

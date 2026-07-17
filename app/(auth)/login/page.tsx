@@ -207,26 +207,35 @@ function LoginForm() {
           ) : (
             <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
 
-              <div className="flex flex-col gap-2.5">
-                <OAuthButton
-                  label="Continue with Google"
-                  icon={<GoogleIcon />}
-                  onClick={() => handleOAuth('google')}
-                  loading={isLoading}
-                />
-                <OAuthButton
-                  label="Continue with Apple"
-                  icon={<AppleIcon />}
-                  onClick={() => handleOAuth('apple')}
-                  loading={isLoading}
-                />
-              </div>
+              {/* OAuth hidden for App Store v1 (Guideline 4.8: any third-party
+                  login requires Sign in with Apple, which needs the enrolled
+                  developer account). Verified 2026-07-13: only 1 google-auth
+                  user (founder test account). Re-enable Google + Apple
+                  TOGETHER post-launch. */}
+              {OAUTH_ENABLED && (
+                <>
+                  <div className="flex flex-col gap-2.5">
+                    <OAuthButton
+                      label="Continue with Google"
+                      icon={<GoogleIcon />}
+                      onClick={() => handleOAuth('google')}
+                      loading={isLoading}
+                    />
+                    <OAuthButton
+                      label="Continue with Apple"
+                      icon={<AppleIcon />}
+                      onClick={() => handleOAuth('apple')}
+                      loading={isLoading}
+                    />
+                  </div>
 
-              <div className="flex items-center gap-3">
-                <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
-                <span style={{ fontSize: '12px', color: 'var(--et-placeholder)', fontWeight: 500 }}>or continue with email</span>
-                <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
-              </div>
+                  <div className="flex items-center gap-3">
+                    <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
+                    <span style={{ fontSize: '12px', color: 'var(--et-placeholder)', fontWeight: 500 }}>or continue with email</span>
+                    <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
+                  </div>
+                </>
+              )}
 
               <form onSubmit={handleLogin} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -288,6 +297,9 @@ function LoginForm() {
 }
 
 // useSearchParams requires Suspense boundary
+// Flip to true only when Sign in with Apple is configured alongside Google (Guideline 4.8)
+const OAUTH_ENABLED = false
+
 export default function LoginPage() {
   return (
     <Suspense>

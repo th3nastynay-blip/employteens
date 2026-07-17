@@ -94,6 +94,9 @@ function ErrorBanner({ message }: { message: string }) {
 
 type Status = 'idle' | 'loading-oauth' | 'loading-email' | 'needs-verification'
 
+// Flip to true only when Sign in with Apple is configured alongside Google (Guideline 4.8)
+const OAUTH_ENABLED = false
+
 export default function SignupPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -298,30 +301,34 @@ export default function SignupPage() {
           ) : (
             <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
 
-              {/* OAuth buttons */}
-              <div className="flex flex-col gap-2.5">
-                <OAuthButton
-                  provider="google"
-                  label="Continue with Google"
-                  icon={<GoogleIcon />}
-                  onClick={() => handleOAuth('google')}
-                  loading={isLoading}
-                />
-                <OAuthButton
-                  provider="apple"
-                  label="Continue with Apple"
-                  icon={<AppleIcon />}
-                  onClick={() => handleOAuth('apple')}
-                  loading={isLoading}
-                />
-              </div>
+              {/* OAuth hidden for App Store v1 (Guideline 4.8) — re-enable
+                  Google + Apple TOGETHER once Sign in with Apple is configured */}
+              {OAUTH_ENABLED && (
+                <>
+                  <div className="flex flex-col gap-2.5">
+                    <OAuthButton
+                      provider="google"
+                      label="Continue with Google"
+                      icon={<GoogleIcon />}
+                      onClick={() => handleOAuth('google')}
+                      loading={isLoading}
+                    />
+                    <OAuthButton
+                      provider="apple"
+                      label="Continue with Apple"
+                      icon={<AppleIcon />}
+                      onClick={() => handleOAuth('apple')}
+                      loading={isLoading}
+                    />
+                  </div>
 
-              {/* Divider */}
-              <div className="flex items-center gap-3">
-                <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
-                <span style={{ fontSize: '12px', color: 'var(--et-placeholder)', fontWeight: 500 }}>or continue with email</span>
-                <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
-              </div>
+                  <div className="flex items-center gap-3">
+                    <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
+                    <span style={{ fontSize: '12px', color: 'var(--et-placeholder)', fontWeight: 500 }}>or continue with email</span>
+                    <div style={{ flex: 1, height: 1, background: 'var(--et-border)' }} />
+                  </div>
+                </>
+              )}
 
               {/* Email form */}
               <form onSubmit={handleEmailSignup} className="flex flex-col gap-3">

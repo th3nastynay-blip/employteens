@@ -530,6 +530,96 @@ export default function ProfilePage() {
           Sign out
         </motion.button>
 
+        {/* ── Delete account (App Store 5.1.1(v)) ── */}
+        <DeleteAccountSection />
+
+        {/* ── Legal links ── */}
+        <div className="flex justify-center gap-4" style={{ marginTop: 16, paddingBottom: 8 }}>
+          <a href="/privacy" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Privacy</a>
+          <a href="/terms" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Terms</a>
+          <a href="/support" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Support</a>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+function DeleteAccountSection() {
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleDelete() {
+    setDeleting(true)
+    setError('')
+    try {
+      const res = await fetch('/api/account/delete', { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body?.error ?? 'Something went wrong — try again or email support.')
+        setDeleting(false)
+        return
+      }
+      // Account is gone server-side; clear the local session and leave
+      const supabase = createClient()
+      await supabase.auth.signOut().catch(() => { /* session already invalid */ })
+      window.location.href = '/'
+    } catch {
+      setError('Something went wrong — try again or email support.')
+      setDeleting(false)
+    }
+  }
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        style={{
+          width: '100%', marginTop: 10, padding: '10px 0', background: 'none',
+          border: 'none', fontSize: '12px', color: 'var(--et-placeholder)',
+          cursor: 'pointer', textDecoration: 'underline',
+        }}
+      >
+        Delete account
+      </button>
+    )
+  }
+
+  return (
+    <div
+      className="card px-4 py-4"
+      style={{ marginTop: 10, border: '1px solid rgba(220,38,38,0.25)', background: 'rgba(220,38,38,0.03)' }}
+    >
+      <p style={{ fontSize: '14px', fontWeight: 700, color: '#B91C1C' }}>Delete your account?</p>
+      <p style={{ fontSize: '13px', color: 'var(--et-subtle)', marginTop: 4, lineHeight: 1.5 }}>
+        This permanently removes your profile, saved jobs, applications, and all data — immediately
+        and irreversibly.
+      </p>
+      {error && <p style={{ fontSize: '12px', color: '#B91C1C', marginTop: 6 }}>{error}</p>}
+      <div className="flex gap-2" style={{ marginTop: 12 }}>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          style={{
+            flex: 1, height: 42, borderRadius: 'var(--radius-md)', border: 'none',
+            background: '#DC2626', color: 'white', fontSize: '13px', fontWeight: 700,
+            cursor: 'pointer', opacity: deleting ? 0.6 : 1,
+          }}
+        >
+          {deleting ? 'Deleting…' : 'Yes, delete everything'}
+        </button>
+        <button
+          onClick={() => setConfirming(false)}
+          disabled={deleting}
+          style={{
+            flex: 1, height: 42, borderRadius: 'var(--radius-md)',
+            border: '1.5px solid var(--et-border-mid)', background: 'var(--et-surface)',
+            color: 'var(--et-subtle)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Keep my account
+        </button>
       </div>
     </div>
   )

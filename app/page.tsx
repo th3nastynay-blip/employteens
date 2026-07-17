@@ -180,6 +180,18 @@ export default function HomePage() {
           For teens 14–19 in New York &amp; New Jersey
         </motion.p>
 
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="flex justify-center gap-4"
+          style={{ marginTop: '10px' }}
+        >
+          <Link href="/privacy" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Privacy</Link>
+          <Link href="/terms" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Terms</Link>
+          <Link href="/support" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Support</Link>
+        </motion.div>
+
       </div>
     </main>
   )

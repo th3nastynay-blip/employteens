@@ -18,6 +18,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // ?users=1 → auth provider counts only (no PII). Used to confirm hiding
+  // Google OAuth won't lock out real users before App Store v1.
+  if (req.nextUrl.searchParams.get('users') === '1') {
+    const { createAdminClient } = await import('@/lib/supabase/server')
+    const admin = await createAdminClient()
+    const { data } = await admin.auth.admin.listUsers({ perPage: 200 })
+    const byProvider: Record<string, number> = {}
+    for (const u of data?.users ?? []) {
+      const p = (u.app_metadata?.provider as string) ?? 'unknown'
+      byProvider[p] = (byProvider[p] ?? 0) + 1
+    }
+    return NextResponse.json({ total_users: data?.users?.length ?? 0, by_provider: byProvider })
+  }
+
   const env = {
     GROQ_API_KEY: process.env.GROQ_API_KEY ? `set (${process.env.GROQ_API_KEY.length} chars, starts ${process.env.GROQ_API_KEY.slice(0, 4)}…)` : 'MISSING',
     GEMINI_API_KEY: process.env.GEMINI_API_KEY ? `set (${process.env.GEMINI_API_KEY.length} chars)` : 'missing',

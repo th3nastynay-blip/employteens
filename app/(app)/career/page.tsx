@@ -19,18 +19,8 @@ const SUGGESTED_PROMPTS = [
 ]
 
 function LogoMark({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 52 52" fill="none">
-      <defs>
-        <linearGradient id="aiLg" x1="0" y1="0" x2="52" y2="52" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#2563EB" />
-          <stop offset="1" stopColor="#7C3AED" />
-        </linearGradient>
-      </defs>
-      <rect width="52" height="52" rx="14" fill="url(#aiLg)" />
-      <path d="M29 9L17 28H25L23 43L35 24H27L29 9Z" fill="white" fillOpacity="0.95" />
-    </svg>
-  )
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/logo.png" width={size} height={size} alt="EmployTeens" style={{ borderRadius: size * 0.28, display: 'block' }} />
 }
 
 function TypingIndicator() {

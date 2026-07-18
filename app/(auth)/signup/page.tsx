@@ -9,17 +9,8 @@ import { createClient } from '@/lib/supabase/client'
 const ease = [0.22, 1, 0.36, 1] as const
 
 function LogoMark() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 52 52" fill="none">
-      <defs>
-        <linearGradient id="suLg" x1="0" y1="0" x2="52" y2="52" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#2563EB" /><stop offset="1" stopColor="#7C3AED" />
-        </linearGradient>
-      </defs>
-      <rect width="52" height="52" rx="16" fill="url(#suLg)" />
-      <path d="M29 9L17 28H25L23 43L35 24H27L29 9Z" fill="white" fillOpacity="0.95" />
-    </svg>
-  )
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/logo.png" width={40} height={40} alt="EmployTeens" style={{ borderRadius: 11, display: 'block' }} />
 }
 
 function GoogleIcon() {

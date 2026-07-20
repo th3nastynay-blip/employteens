@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>EmployTeens</title>
+  <style>
+    body { margin:0; font-family:-apple-system,system-ui,sans-serif; background:#FAFAFA; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .box { text-align:center; padding:24px; }
+    img { width:96px; height:96px; border-radius:26px; }
+    h1 { font-size:20px; color:#111; letter-spacing:-0.02em; margin:16px 0 6px; }
+    p { font-size:14px; color:#666; line-height:1.5; margin:0; }
+    button { margin-top:18px; padding:12px 24px; border:none; border-radius:12px; background:linear-gradient(135deg,#2563EB,#7C3AED); color:#fff; font-size:15px; font-weight:600; }
+  </style>
+</head>
+<body>
+  <!-- Offline fallback: shown only if the remote app can't load -->
+  <div class="box">
+    <img src="logo.png" alt="EmployTeens" />
+    <h1>You&rsquo;re offline</h1>
+    <p>EmployTeens needs an internet connection<br/>to show you verified jobs.</p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>

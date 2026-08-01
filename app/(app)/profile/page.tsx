@@ -223,7 +223,7 @@ export default function ProfilePage() {
   // ── Loading skeleton ────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="px-5 pt-12 flex flex-col gap-4">
+      <div className="px-5 pt-safe-header flex flex-col gap-4">
         {[80, 200, 120, 160, 100].map((h, i) => (
           <div key={i} className="skeleton" style={{ height: h, borderRadius: 'var(--radius-xl)' }} />
         ))}
@@ -264,7 +264,7 @@ export default function ProfilePage() {
     <div className="flex flex-col pb-8">
 
       {/* ── Header ── */}
-      <div className="px-5 pt-12 pb-6">
+      <div className="px-5 pt-safe-header pb-6">
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontSize: '13px', color: 'var(--et-muted)', fontWeight: 500 }}>
           Your career profile
         </motion.p>

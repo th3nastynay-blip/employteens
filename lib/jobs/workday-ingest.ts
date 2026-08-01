@@ -64,6 +64,25 @@ const TENANTS: WorkdayTenant[] = [
     tenant: 'michaels', wd: 'wd5', site: 'External', name: 'Michaels', min_age: 16,
     searchTexts: ['New Jersey', 'New York NY'],
   },
+  {
+    // UNCONFIRMED (2026-07-25) — web search surfaced both wd504 and wd1 as
+    // Kohl's Workday instance; picked wd504 (more specific hit). Per this
+    // file's own principle, a wrong guess just yields zero jobs on the next
+    // run — cheap to test, not worth blocking on. Verify against the next
+    // live ingest run's per-tenant results before trusting this comment.
+    tenant: 'kohls', wd: 'wd504', site: 'kohlscareers', name: "Kohl's", min_age: 16,
+    searchTexts: ['New Jersey', 'New York NY'],
+  },
+  {
+    // Confirmed 2026-08-01 via live web search returning real
+    // wawa.wd1.myworkdayjobs.com/careers URLs (Wawa's own job-search portal
+    // links, not a guess). Convenience-store cashier/food-service roles,
+    // heavy NJ presence. NOT independently probed against the Workday CXS
+    // endpoint (this environment's network couldn't reach
+    // myworkdayjobs.com) — same "cheap to test" caveat as Kohl's above.
+    tenant: 'wawa', wd: 'wd1', site: 'careers', name: 'Wawa', min_age: 16,
+    searchTexts: ['New Jersey', 'New York NY'],
+  },
 ]
 
 interface WorkdayPosting {

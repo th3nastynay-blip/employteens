@@ -29,6 +29,7 @@ export type VerificationStatus =
   | 'mismatch'
   | 'no_apply_mechanism'
   | 'aggregator'
+  | 'account_wall'
 
 export interface VerificationResult {
   status: VerificationStatus
@@ -165,16 +166,29 @@ export function isTrustedDestination(url: string, company: string): boolean {
 
   if (TRUSTED_ATS_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))) return true
 
-  // Employer-domain heuristic: any company-name token (≥4 chars, not a
-  // stopword) appearing in the hostname. "Sweetgreen" → careers.sweetgreen.com,
+  // Employer-domain heuristic: "Sweetgreen" → careers.sweetgreen.com,
   // "BoxLunch / Hot Topic" → hottopic.com, "City of Jersey City" → jerseycitynj.gov.
+  //
+  // TIGHTENED 2026-08-01: this used to trust a destination if ANY ONE
+  // significant company-name token (≥4 chars) appeared anywhere in the
+  // hostname. A company called "City Bakery" made ANY domain containing
+  // "bakery" — a staffing agency, a generic recruiting SaaS, anything —
+  // count as "the employer's own site." That single-token loophole was the
+  // main way a redirect chain could end up trusted somewhere it shouldn't.
+  // Now: a one-word company name still only has one token to match (nothing
+  // looser is possible), but a multi-word company must match EVERY
+  // significant token, or its full name run together, before the
+  // destination counts as trusted.
   const tokens = (company ?? '')
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((t) => t.length >= 4 && !COMPANY_STOPWORDS.has(t))
+  if (tokens.length === 0) return false
+
   const hostFlat = host.replace(/[^a-z0-9]/g, '')
-  return tokens.some((t) => hostFlat.includes(t))
+  if (tokens.length === 1) return hostFlat.includes(tokens[0])
+  return tokens.every((t) => hostFlat.includes(t)) || hostFlat.includes(tokens.join(''))
 }
 
 // Search/browse pages: even on an employer's own domain, a URL whose path or
@@ -262,6 +276,34 @@ const APPLY_INDICATOR_PATTERNS: RegExp[] = [
 
 function hasApplyMechanism(text: string): boolean {
   return APPLY_INDICATOR_PATTERNS.some((p) => p.test(text))
+}
+
+// Added 2026-08-01 in response to "these links are tough" — a page can
+// return 200, be a specific posting, and still not be a real one-tap apply
+// flow if it forces the teen to create an account or register before they
+// can even submit. Deliberately narrow phrasing (requires "must/required/
+// before you can" language paired with account/register/sign-in), not a
+// bare "create an account" match — plenty of legitimate postings mention
+// account creation as an OPTIONAL post-apply step ("create an account to
+// track your application"), and that shouldn't reject a real posting.
+// NOTE: this only ever runs on the fetch-and-inspect path (Step 3 below).
+// JS-required ATS domains (Workday, Greenhouse, Lever, Ashby,
+// SmartRecruiters — see JS_REQUIRED_DOMAINS) are trusted on URL pattern
+// alone without a page fetch, so this can't catch an account wall on those
+// platforms even though some of them (Workday especially) are known for
+// requiring a candidate account before you can submit. That's a structural
+// property of trusting those ATSs' own APIs as source-of-truth, not
+// something a text pattern can fix — see the response to the user for the
+// actual tradeoff.
+const ACCOUNT_WALL_PATTERNS: RegExp[] = [
+  /(you (must|will need to|need to)|please) (create|sign up for) an? (account|candidate profile|profile) (to|before you can) apply/i,
+  /(create|creating) an? account is required (to|before) (you can )?appl/i,
+  /(sign in|log in|register|registration) is required (to|before) (you can )?appl/i,
+  /must (sign in|log in|register|create an account) (to|before) (you can )?appl/i,
+]
+
+function hasAccountWall(text: string): boolean {
+  return ACCOUNT_WALL_PATTERNS.some((p) => p.test(text))
 }
 
 const STOPWORDS = new Set([
@@ -503,6 +545,17 @@ export async function verifyJobUrl(
             reason: 'Page loads and matches the posting, but no application mechanism (apply button/link/form language) was found anywhere on it',
             has_apply_mechanism: false,
           }
+        }
+      }
+
+      // Account-wall check: same scope as has_apply_mechanism above (only
+      // meaningful when we actually fetched body text on a non-program page).
+      if (bodyText && !opts?.programPage && hasAccountWall(bodyText)) {
+        return {
+          status: 'account_wall',
+          http_status: res.status,
+          is_active: false,
+          reason: 'Page requires creating an account or signing in before you can apply — not a one-tap apply flow',
         }
       }
 

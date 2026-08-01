@@ -150,12 +150,17 @@ export function cleanJobTitle(rawTitle: string): CleanedTitle {
 
   // Trailing punctuation left by junk removal ("Operations Associate, Bronx, #620"
   // → junk strips "#620" → "Operations Associate, Bronx," needs the comma gone
-  // BEFORE the comma-location strip can see the pattern)
-  working = working.replace(/[،,;:\-–—/\s]+$/, '').trim()
+  // BEFORE the comma-location strip can see the pattern). Includes ")"/"("
+  // because scraped titles sometimes carry an UNBALANCED trailing paren (the
+  // opening "(" was truncated upstream or never scraped) — the JUNK_PATTERNS
+  // parenthetical-strip above requires a matching pair and silently leaves a
+  // lone ")" in place, which then blocks the comma-location regex below from
+  // reaching end-of-string (e.g. "GM and Food, Starbucks)" stayed dirty).
+  working = working.replace(/[،,;:\-–—/\s)(]+$/, '').trim()
 
   // Titles ending in a comma-location: "Cashier, Jersey City" → "Cashier"
   working = working.replace(/,\s*[A-Z][a-zA-Z\s]+$/, '').trim()
-  working = working.replace(/[،,;:\-–—/\s]+$/, '').trim()
+  working = working.replace(/[،,;:\-–—/\s)(]+$/, '').trim()
 
   if (working.length === 0) {
     return { title: raw.slice(0, 60), tags, confidence: 10 }

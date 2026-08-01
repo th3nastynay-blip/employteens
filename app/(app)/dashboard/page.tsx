@@ -211,7 +211,7 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-full">
 
       {/* ── Header ── */}
-      <div className="px-5 pt-12 pb-5">
+      <div className="px-5 pt-safe-header pb-5">
         <motion.p
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}

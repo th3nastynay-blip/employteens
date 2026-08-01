@@ -3,6 +3,17 @@
  * Adzuna returns specific job posting URLs for major retail/food chains.
  * This is the primary source for McDonald's, Target, Chipotle, AMC, etc.
  *
+ * UNWIRED from the daily cron 2026-08-01: per the 2026-07-09 quality sprint,
+ * Adzuna's API terminates every link on a JS lander page with another Apply
+ * hop — 887 fetched → 0 inserted under the current trust rules, structurally
+ * dead as a source. It was also the main remaining path for a redirect
+ * chain to land somewhere unintended (Lensa, staffing-agency sites, etc.)
+ * before the final-destination check catches it — removing it from the
+ * schedule closes that door at zero real cost to job volume. Route kept for
+ * reference / in case Adzuna's API shape changes; not on any schedule.
+ * Existing 'adzuna'-sourced rows in the jobs table should be purged — see
+ * /api/admin/purge-source.
+ *
  * Setup (free): https://developer.adzuna.com/
  * Env vars needed:
  *   ADZUNA_APP_ID — from developer.adzuna.com

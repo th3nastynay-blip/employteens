@@ -79,15 +79,30 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
     setSaving(false)
   }
 
+  const isHumanContact = job.apply_method === 'call' || job.apply_method === 'text' || job.apply_method === 'email'
+  const CONTACT_COPY: Record<'call' | 'text' | 'email', { badge: string; button: string }> = {
+    call:  { badge: '📞 Call to apply',  button: '📞 Call to Apply' },
+    text:  { badge: '💬 Text to apply',  button: '💬 Text to Apply' },
+    email: { badge: '✉️ Email to apply', button: '✉️ Email to Apply' },
+  }
+
   async function handleApply() {
-    // Open the official application URL
+    // Human-contact jobs: apply_url is a synthetic tel:/sms:/mailto: URI (set
+    // at ingest time, see smb-phone-ingest.ts) — window.open on it hands off
+    // to the OS dialer/Messages/Mail app the same way a plain <a href> would.
+    // Nothing else needs to branch here.
     window.open(job.apply_url, '_blank', 'noopener,noreferrer')
 
     // Do NOT mark as applied — clicking Apply only means they opened the
     // page. The pending click is recorded locally; when the user returns,
     // ApplyConfirmSheet asks "Did you apply?" and only a confirmed Yes
     // writes status='applied'. Analytics still capture the click itself.
-    recordApplyClick({ id: job.id, title: job.title, company: job.company })
+    recordApplyClick({
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      contactMethod: isHumanContact ? (job.apply_method as 'call' | 'text' | 'email') : undefined,
+    })
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -106,7 +121,13 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
   const matchLabel = getMatchLabel(job.match_score)
   const hiresfast = job.hiring_speed_score >= 80
   const reasons = parseReasons(job.match_explanation)
-  const hasPay = job.salary_min || job.salary_max
+  // Last-resort guard against unit-mismatched salary data reaching a real
+  // screen (e.g. an annual figure stored before ingest-pipeline.ts's own
+  // sanitizeHourlyWage existed) — this label always says "/hr" with no unit
+  // shown, so a bad number here isn't a cosmetic glitch, it's a wrong number
+  // in front of a teen. Falls back to "Competitive pay" like missing salary does.
+  const plausibleSalary = (n: number | null | undefined) => n != null && n > 0 && n <= 100
+  const hasPay = plausibleSalary(job.salary_min) || plausibleSalary(job.salary_max)
 
   // Trust badges — all computed from real verification/posting data.
   // "now" is captured once on mount (useState initializer) to keep render
@@ -158,6 +179,11 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             {isProgram && (
               <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
                 🏛️ City program
+              </span>
+            )}
+            {isHumanContact && (
+              <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
+                {CONTACT_COPY[job.apply_method as 'call' | 'text' | 'email'].badge}
               </span>
             )}
             {isNew && !isProgram && (
@@ -270,13 +296,21 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             <span className="badge badge-blue">No experience needed</span>
           )}
           {hasPay ? (
-            <span className="badge badge-subtle">${job.salary_min ?? job.salary_max}/hr</span>
+            <span className="badge badge-subtle">
+              ${plausibleSalary(job.salary_min) ? job.salary_min : job.salary_max}/hr
+            </span>
           ) : (
             <span className="badge badge-subtle">Competitive pay</span>
           )}
         </div>
 
         <p style={{ fontSize: '12px', color: 'var(--et-placeholder)' }}>{job.location}</p>
+
+        {isHumanContact && job.contact_note && (
+          <p style={{ fontSize: '12px', color: 'var(--et-subtle)', lineHeight: 1.4, background: 'var(--et-blue-light)', padding: '8px 10px', borderRadius: 'var(--radius-sm)' }}>
+            {job.apply_method === 'email' ? '✉️' : '📞'} {job.apply_method === 'email' ? job.contact_email : job.contact_phone} — {job.contact_note}
+          </p>
+        )}
 
         <div className="flex gap-2.5">
           <motion.button
@@ -307,7 +341,9 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             className="btn-primary flex-1"
             style={{ height: 46, borderRadius: 'var(--radius-md)', fontSize: '14px' }}
           >
-            {isProgram ? 'Learn & apply →' : 'Apply Now →'}
+            {isHumanContact
+              ? CONTACT_COPY[job.apply_method as 'call' | 'text' | 'email'].button
+              : isProgram ? 'Learn & apply →' : 'Apply Now →'}
           </motion.button>
         </div>
       </div>

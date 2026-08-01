@@ -6,6 +6,13 @@
  * retail & food-service roles (Adzuna is the other major aggregator; Greenhouse/
  * Lever/Ashby/SmartRecruiters skew corporate/tech and won't have much of this).
  *
+ * UNWIRED from the daily cron 2026-08-01: only ~2 of every 50 results
+ * survived pickTrustedApplyLink under the current rules (the rest point at
+ * Indeed/LinkedIn/ZipRecruiter/staffing agencies) — low yield for the risk
+ * it carries as a redirect/aggregator vector. Route kept for reference; not
+ * on any schedule. Existing 'jsearch'-sourced rows in the jobs table should
+ * be purged — see /api/admin/purge-source.
+ *
  * Setup: https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
  *   1. Subscribe to the free "Basic" plan (small monthly quota — keep the
  *      query list below short, each query = 1 request against that quota)
@@ -87,6 +94,18 @@ interface JSearchResult {
   job_employment_type?: string
   job_min_salary?: number | null
   job_max_salary?: number | null
+  /** "YEAR"|"MONTH"|"WEEK"|"DAY"|"HOUR" — the job card always renders salary
+   *  as "$N/hr", so anything that isn't already hourly must be dropped, not
+   *  guess-converted. A $45,000/YEAR listing passed through unchecked would
+   *  render as "$45000/hr" on a real teen's screen. */
+  job_salary_period?: string | null
+}
+
+/** Only pass salary through when it's confirmed hourly — see field comment above. */
+function hourlyOrUndefined(amount: number | null | undefined, period: string | null | undefined): number | undefined {
+  if (amount == null) return undefined
+  if ((period ?? '').toUpperCase() !== 'HOUR') return undefined
+  return amount
 }
 
 /**
@@ -193,8 +212,8 @@ export async function POST(req: NextRequest) {
             description: r.job_description ?? '',
             posted_at: r.job_posted_at_datetime_utc,
             job_type: r.job_employment_type,
-            salary_min: r.job_min_salary ?? undefined,
-            salary_max: r.job_max_salary ?? undefined,
+            salary_min: hourlyOrUndefined(r.job_min_salary, r.job_salary_period),
+            salary_max: hourlyOrUndefined(r.job_max_salary, r.job_salary_period),
             // Metadata comes from Google's index, not the destination page —
             // keep content-matching on
             isAggregator: true,

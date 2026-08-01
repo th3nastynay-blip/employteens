@@ -85,9 +85,17 @@ const ZIP_CENTROIDS: Record<string, [number, number]> = {
   '07042': [40.813, -74.212], // Montclair
   '11354': [40.768, -73.827], // Flushing/Queens
   '10451': [40.820, -73.925], // South Bronx
-  '10301': [40.631, -74.094], // Staten Island
+  '10301': [40.631, -74.094], // Staten Island (St. George)
   '10701': [40.940, -73.880], // Yonkers
   '10580': [40.981, -73.684], // Rye (Playland)
+  // Added for lib/jobs/smb-phone-sources.ts entries (2026-07-21) — without
+  // these, the small-business location boost in computeMatchScore() can
+  // never fire for these zips (falls back to the conservative samePrefix/
+  // sameState bands, both < 80), defeating the whole point of adding them.
+  '11105': [40.775, -73.912], // Astoria, Queens
+  '10469': [40.869, -73.857], // Baychester, Bronx
+  '11215': [40.668, -73.985], // Park Slope, Brooklyn
+  '10307': [40.509, -74.246], // Tottenville, Staten Island
 }
 
 function haversineMiles(a: [number, number], b: [number, number]): number {
@@ -256,13 +264,32 @@ const WEIGHTS = {
   experience: 0.10,
 } as const
 
+// Genuinely independent small businesses (lib/jobs/smb-phone-sources.ts,
+// source === 'smb_phone') call teens back faster than chains — product
+// direction 2026-07-21 is to surface them prominently, but ONLY when
+// they're actually near the teen. A flat boost regardless of distance would
+// float a Bronx deli to the top of a Jersey City feed, which defeats the
+// entire "local" premise. Gated on loc.score >= 80 — the same "genuinely
+// close" threshold scoreLocation() already uses for its top two bands, so
+// this reuses an existing definition of "nearby" instead of inventing a new
+// one. Applied as a flat post-weighting bonus (not baked into the 0-100
+// weighted average) so it's easy to see, explain, and tune independently.
+const SMALL_BUSINESS_LOCAL_BOOST = 12
+
 function buildReasons(
   user: UserProfile,
   job: JobRow,
   scores: Omit<ScoreBreakdown, 'weights'>,
   transports: Transportation[],
+  isLocalSmallBusiness = false,
 ): MatchReason[] {
   const reasons: MatchReason[] = []
+
+  // Surface WHY this ranked high — the boost is invisible otherwise and a
+  // teen has no reason to trust a deli over a chain they recognize.
+  if (isLocalSmallBusiness) {
+    reasons.push({ text: 'Local, independently owned — often faster to hear back from', positive: true })
+  }
 
   // Distance — the most concrete, trust-building fact we can state
   if (scores.distance_miles !== null && scores.distance_miles <= 3) {
@@ -395,7 +422,7 @@ export function computeMatchScore(user: UserProfile, job: JobRow): MatchResult {
     distance_miles: loc.miles,
   }
 
-  const weighted =
+  let weighted =
     scores.schedule         * WEIGHTS.schedule +
     scores.location         * WEIGHTS.location +
     scores.interest         * WEIGHTS.interest +
@@ -403,8 +430,11 @@ export function computeMatchScore(user: UserProfile, job: JobRow): MatchResult {
     scores.urgency          * WEIGHTS.urgency +
     scores.experience       * WEIGHTS.experience
 
+  const isLocalSmallBusiness = job.source === 'smb_phone' && scores.location >= 80
+  if (isLocalSmallBusiness) weighted += SMALL_BUSINESS_LOCAL_BOOST
+
   const match_score = Math.round(Math.min(100, Math.max(0, weighted)))
-  const reasons = buildReasons(user, job, scores, transports)
+  const reasons = buildReasons(user, job, scores, transports, isLocalSmallBusiness)
 
   return {
     match_score,

@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
       : f.reason.toLowerCase().includes('no application mechanism') ? 'No apply mechanism found on page'
       : f.reason.toLowerCase().includes("doesn't match expected") ? 'Title/location mismatch'
       : f.reason.toLowerCase().includes('generic') ? 'Generic career page'
+      : f.reason.toLowerCase().includes('account') || f.reason.toLowerCase().includes('sign in') ? 'Requires account/sign-in to apply'
       : f.reason.toLowerCase().includes('redirect') ? 'Redirects to generic page'
       : f.reason.toLowerCase().includes('timeout') ? 'Timeout'
       : `Other (${f.http_status ?? 'no status'})`

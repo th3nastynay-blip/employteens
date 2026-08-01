@@ -126,6 +126,20 @@ export interface JobRow {
   is_active: boolean
   verification_status: VerificationStatus | 'expired'
   posted_at?: string | null
+  // Call/text/email-to-apply metadata — added by
+  // supabase/migrations/add_apply_method_fields.sql. Non-'url' jobs have no
+  // fetchable apply_url liveness check; human_verified_at/by is the trail
+  // that stands in for it, and human_reverify_by is enforced by
+  // lib/jobs/smb-phone-ingest.ts, not the URL-recheck cron. 'call'/'text'
+  // use contact_phone (different tel:/sms: URI scheme baked into apply_url
+  // at ingest time); 'email' uses contact_email.
+  apply_method: 'url' | 'call' | 'text' | 'email'
+  contact_phone?: string | null
+  contact_email?: string | null
+  contact_note?: string | null
+  human_verified_at?: string | null
+  human_verified_by?: string | null
+  human_reverify_by?: string | null
   embedding: number[] | null
   created_at: string
   updated_at?: string

@@ -82,7 +82,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen flex flex-col" style={{ background: 'var(--et-surface)' }}>
-      <div className="flex-1 flex flex-col px-6 pt-14 pb-10 max-w-sm mx-auto w-full">
+      <div className="flex-1 flex flex-col px-6 pt-safe-hero pb-10 max-w-sm mx-auto w-full">
 
         {/* Logo mark */}
         <motion.div

@@ -16,7 +16,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
-import { verifyJobUrl, isGenericCareerPage } from './verify-url'
+import { verifyJobUrl, isGenericCareerPage, type VerificationResult } from './verify-url'
 import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, resolveMinAge, isTeenAppropriateTitle } from './teen-scoring'
 import { cleanJobTitle } from './clean-title'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from './quality-score'
@@ -53,6 +53,30 @@ export interface NormalizedJob {
   isProgramPage?: boolean
   /** Pre-set user-facing tags (curated sources); merged with tags extracted from the title */
   tags?: string[]
+  /**
+   * Small businesses that hire by call, text, or email instead of an online
+   * application — see lib/jobs/smb-phone-sources.ts. There's no URL to
+   * fetch, so verifyJobUrl is never called for these; legitimacy instead
+   * rests on a HUMAN having confirmed the listing (humanVerifiedAt/By
+   * below), REGARDLESS of which of the three the teen ends up using —
+   * texting instead of calling doesn't skip the "someone made real contact
+   * and confirmed this is a real, currently-hiring, age-appropriate role"
+   * step, it only changes what the teen does once that's already true.
+   * humanVerifiedAt/By/ReverifyBy are REQUIRED when this is set — missing
+   * any one rejects the entry rather than silently treating it as trusted.
+   * contactPhone is required for 'call'/'text'; contactEmail for 'email'.
+   * apply_url should still be set to a synthetic `tel:`/`sms:`/`mailto:`
+   * string matching contactMethod (satisfies the NOT NULL column and
+   * doubles as the actual tap-to-contact link in the UI).
+   */
+  contactMethod?: 'call' | 'text' | 'email'
+  contactPhone?: string
+  contactEmail?: string
+  contactNote?: string
+  humanVerifiedAt?: string
+  humanVerifiedBy?: string
+  /** Past this date the entry is treated as stale and rejected/deactivated until re-verified */
+  humanReverifyBy?: string
 }
 
 export interface IngestStats {
@@ -64,9 +88,14 @@ export interface IngestStats {
   rejected_mismatch: number
   rejected_scam: number
   rejected_no_apply: number
+  rejected_account_wall: number
   rejected_aggregator: number
   rejected_low_quality: number
   rejected_not_teen_job: number
+  /** Phone-contact entry missing a required human-verification field — never auto-trusted */
+  rejected_unverified_contact: number
+  /** Phone-contact entry whose humanReverifyBy date has passed — needs a fresh call */
+  rejected_stale_contact: number
   inserted: number
   updated: number
   duplicate: number
@@ -78,6 +107,23 @@ export interface IngestStats {
 const MAX_DIAGNOSTICS = 10
 
 const SCAM_THRESHOLD = 70
+
+// Defense in depth, not the primary fix (that's per-source, e.g. the
+// job_salary_period check in app/api/ingest/jsearch/route.ts). This is the
+// LAST line of defense before a number reaches the jobs table — the job
+// card always renders salary as "$N/hr" with no unit label, so any future
+// source (or a hand-typed local-sources.ts entry) that passes through an
+// annual/monthly figure by mistake would otherwise ship "$45000/hr" to a
+// real teen's screen with nothing in the pipeline to catch it. No legitimate
+// hourly teen wage is anywhere near this ceiling.
+const MAX_PLAUSIBLE_HOURLY_WAGE = 100
+
+function sanitizeHourlyWage(amount: number | null | undefined): number | undefined {
+  if (amount == null) return undefined
+  const rounded = Math.round(amount)
+  if (rounded <= 0 || rounded > MAX_PLAUSIBLE_HOURLY_WAGE) return undefined
+  return rounded
+}
 
 function inferState(location: string, fallback?: string): string {
   const loc = location.toLowerCase()
@@ -115,9 +161,12 @@ export async function ingestNormalizedJobs(
     rejected_mismatch: 0,
     rejected_scam: 0,
     rejected_no_apply: 0,
+    rejected_account_wall: 0,
     rejected_aggregator: 0,
     rejected_low_quality: 0,
     rejected_not_teen_job: 0,
+    rejected_unverified_contact: 0,
+    rejected_stale_contact: 0,
     inserted: 0,
     updated: 0,
     duplicate: 0,
@@ -219,19 +268,49 @@ export async function ingestNormalizedJobs(
         continue
       }
 
-      const verification = await verifyJobUrl(
-        raw.apply_url,
-        7000,
-        // Company always included → default-deny destination check applies
-        // to every fetched page; title/location content-matching applies to
-        // aggregator-sourced links whose metadata we don't control.
-        raw.isProgramPage
-          ? undefined
-          : raw.isAggregator
-            ? { title: raw.title, location: raw.location, company: raw.company }
-            : { company: raw.company },
-        raw.isProgramPage ? { programPage: true } : undefined,
-      )
+      let verification: VerificationResult
+
+      if (raw.contactMethod) {
+        // No URL to fetch — legitimacy rests entirely on a human having made
+        // real contact and confirmed this listing, regardless of which
+        // channel the TEEN eventually uses. Missing any required field means
+        // it was never verified (or was seeded as a candidate only, see
+        // smb-phone-sources.ts) and must not slip through as trusted.
+        const needsPhone = raw.contactMethod === 'call' || raw.contactMethod === 'text'
+        const channelFieldMissing = needsPhone ? !raw.contactPhone : !raw.contactEmail
+        if (channelFieldMissing || !raw.humanVerifiedAt || !raw.humanVerifiedBy || !raw.humanReverifyBy) {
+          stats.rejected_unverified_contact++
+          noteRejection(raw.apply_url, 'unverified_contact', `${raw.contactMethod}-contact entry missing a required human-verification field — not auto-trusted`)
+          if (options?.alwaysVerify) failedUrls.push(raw.apply_url)
+          continue
+        }
+        if (new Date(raw.humanReverifyBy).getTime() < Date.now()) {
+          stats.rejected_stale_contact++
+          noteRejection(raw.apply_url, 'stale_contact', `Human verification expired ${raw.humanReverifyBy} — needs a fresh check-in before this can go live again`)
+          if (options?.alwaysVerify) failedUrls.push(raw.apply_url)
+          continue
+        }
+        verification = {
+          status: 'verified',
+          http_status: null,
+          is_active: true,
+          reason: `Human-verified (${raw.contactMethod}, ${raw.humanVerifiedBy}, ${raw.humanVerifiedAt})`,
+        }
+      } else {
+        verification = await verifyJobUrl(
+          raw.apply_url,
+          7000,
+          // Company always included → default-deny destination check applies
+          // to every fetched page; title/location content-matching applies to
+          // aggregator-sourced links whose metadata we don't control.
+          raw.isProgramPage
+            ? undefined
+            : raw.isAggregator
+              ? { title: raw.title, location: raw.location, company: raw.company }
+              : { company: raw.company },
+          raw.isProgramPage ? { programPage: true } : undefined,
+        )
+      }
 
       if (verification.status === 'mismatch') {
         stats.rejected_mismatch++
@@ -241,6 +320,12 @@ export async function ingestNormalizedJobs(
 
       if (verification.status === 'no_apply_mechanism') {
         stats.rejected_no_apply++
+        noteRejection(raw.apply_url, verification.status, verification.reason)
+        continue
+      }
+
+      if (verification.status === 'account_wall') {
+        stats.rejected_account_wall++
         noteRejection(raw.apply_url, verification.status, verification.reason)
         continue
       }
@@ -287,12 +372,21 @@ export async function ingestNormalizedJobs(
     const existingByUrl = new Map((existingRows ?? []).map((r) => [r.apply_url, r.id]))
 
     const toUpdateIds: string[] = []
+    // Human-contact rows (call/text/email) can't share the batched update
+    // below — each one's verified_at must reflect ITS OWN human_verified_at
+    // (the actual verification date), not "now" (this cron run). Low volume
+    // by nature, so per-row is fine.
+    const toUpdateHumanContact: { id: string; raw: NormalizedJob }[] = []
     const toInsert: Record<string, unknown>[] = []
 
     for (const v of verifiedJobs) {
       const existingId = existingByUrl.get(v.finalUrl)
       if (existingId) {
-        toUpdateIds.push(existingId)
+        if (v.raw.contactMethod) {
+          toUpdateHumanContact.push({ id: existingId, raw: v.raw })
+        } else {
+          toUpdateIds.push(existingId)
+        }
         continue
       }
 
@@ -336,6 +430,8 @@ export async function ingestNormalizedJobs(
         qualityTag(quality.score),
       ]))
 
+      const isHumanContact = !!v.raw.contactMethod
+
       toInsert.push({
         title: cleaned.title,
         tags,
@@ -346,6 +442,13 @@ export async function ingestNormalizedJobs(
         // the location string so the match engine can compute honest miles.
         zip_code: v.raw.zip_code ?? zipFromLocation(v.raw.location) ?? '00000',
         apply_url: v.finalUrl,
+        apply_method: v.raw.contactMethod ?? 'url',
+        contact_phone: isHumanContact ? (v.raw.contactPhone ?? null) : null,
+        contact_email: isHumanContact ? (v.raw.contactEmail ?? null) : null,
+        contact_note: isHumanContact ? (v.raw.contactNote ?? null) : null,
+        human_verified_at: isHumanContact ? v.raw.humanVerifiedAt : null,
+        human_verified_by: isHumanContact ? v.raw.humanVerifiedBy : null,
+        human_reverify_by: isHumanContact ? v.raw.humanReverifyBy : null,
         source,
         min_age: v.raw.min_age ?? resolveMinAge(v.raw.title, v.raw.company),
         description: v.raw.description?.slice(0, 800) ?? '',
@@ -358,18 +461,25 @@ export async function ingestNormalizedJobs(
         physical_demand_level: 50,
         customer_interaction_level: 70,
         // Column is INTEGER — a fractional hourly rate (e.g. 15.23) would
-        // fail the whole batch insert with a type error.
-        salary_min: v.raw.salary_min != null ? Math.round(v.raw.salary_min) : undefined,
-        salary_max: v.raw.salary_max != null ? Math.round(v.raw.salary_max) : undefined,
+        // fail the whole batch insert with a type error. sanitizeHourlyWage
+        // also drops anything above a plausible hourly ceiling — see its
+        // definition for why (a $45k/year figure passed through unchecked
+        // renders as "$45000/hr" on the job card).
+        salary_min: sanitizeHourlyWage(v.raw.salary_min),
+        salary_max: sanitizeHourlyWage(v.raw.salary_max),
         job_type: v.raw.job_type,
         status: 'active',
-        verified_at: now,
+        // Human-contact jobs: verified_at/last_verified_at reflect the
+        // actual verification date (humanVerifiedAt), never the cron run
+        // time — a daily re-touch must not look like a fresh re-check that
+        // didn't happen.
+        verified_at: isHumanContact ? v.raw.humanVerifiedAt : now,
         last_checked_at: now,
         http_status: v.httpStatus,
         is_active: true,
         verification_status: 'verified',
         posted_at: v.raw.posted_at ?? now,
-        last_verified_at: now,
+        last_verified_at: isHumanContact ? v.raw.humanVerifiedAt : now,
         embedding: null,
       })
     }
@@ -392,6 +502,27 @@ export async function ingestNormalizedJobs(
         .in('id', toUpdateIds)
     }
 
+    // Human-contact existing rows: per-row, since verified_at must come from
+    // THIS row's own human_verified_at (picks up a fresh verification date
+    // if the source file was updated) rather than a single shared "now" value.
+    for (const { id, raw } of toUpdateHumanContact) {
+      await supabase
+        .from('jobs')
+        .update({
+          last_checked_at: now,
+          is_active: true,
+          verification_status: 'verified',
+          verified_at: raw.humanVerifiedAt,
+          last_verified_at: raw.humanVerifiedAt,
+          human_reverify_by: raw.humanReverifyBy,
+          contact_note: raw.contactNote ?? null,
+          contact_phone: raw.contactPhone ?? null,
+          contact_email: raw.contactEmail ?? null,
+          status: 'active',
+        })
+        .eq('id', id)
+    }
+
     // Pass-0 known-active rows skipped verification, so they get ONLY a
     // last_checked_at bump — no verified_at stamp, no status flip. Clean-jobs
     // remains the sole owner of re-verification cadence for existing jobs.
@@ -402,7 +533,7 @@ export async function ingestNormalizedJobs(
         .in('id', knownIds)
     }
 
-    stats.duplicate = toUpdateIds.length + knownIds.length
+    stats.duplicate = toUpdateIds.length + toUpdateHumanContact.length + knownIds.length
 
     // One batched INSERT for every genuinely new job. If a single row fails
     // a constraint, Postgres can reject the whole batch — falling back to

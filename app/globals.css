@@ -286,6 +286,30 @@ body {
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .pb-nav      { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 
+/* Page headers sit inside the scrollable document (no shared app-level
+   sticky header), so a plain fixed px top-padding under-clears Dynamic
+   Island devices (~59px) once the page scrolls and the header moves up —
+   content ends up rendering behind the status bar. max() keeps the old
+   48px/56px look on non-notch devices while adapting to whatever the
+   device actually reports. */
+.pt-safe-header { padding-top: max(48px, env(safe-area-inset-top)); }
+.pt-safe-hero   { padding-top: max(56px, env(safe-area-inset-top)); }
+
+/* Fixed, opaque cover for the status-bar strip. Sits above all page
+   content (including anything scrolled up under the notch) so the system
+   clock/battery/wifi icons never visually overlap page text. Rendered
+   once in the (app) layout so every tab gets it for free. */
+.status-bar-cover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--et-surface-2);
+  z-index: 100;
+  pointer-events: none;
+}
+
 /* ─── Divider ───────────────────────────────── */
 .divider { height: 1px; background: var(--et-border); }
 

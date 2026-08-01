@@ -76,6 +76,14 @@ const GREENHOUSE_COMPANIES = [
   { slug: 'pressedjuicery', name: 'Pressed Juicery', min_age: 16 },
   { slug: 'chopt', name: 'Chopt Creative Salad', min_age: 16 },
   { slug: 'justsaladcareers', name: 'Just Salad', min_age: 16 },
+  // Added 2026-08-01: found via live web search returning real, current
+  // job posting URLs (e.g. boards.greenhouse.io/blankstreet/jobs/4740474003,
+  // "Barista | New York City at Blank Street") — NOT independently probed
+  // against the Greenhouse API (this environment's network couldn't reach
+  // boards-api.greenhouse.io to confirm), so treat as high-confidence, not
+  // verified-live. First real ingest run is the actual test, same as any
+  // other candidate slug in this file — a 404 just yields zero jobs.
+  { slug: 'blankstreet', name: 'Blank Street Coffee', min_age: 16 },
 ]
 
 // Rebuilt 2026-07-08 after the original 6 slugs (sweetgreen, shake-shack,

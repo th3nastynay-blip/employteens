@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
     kept: 0,
     flagged_aggregator: 0,
     flagged_no_apply: 0,
+    flagged_account_wall: 0,
     flagged_expired_or_dead: 0,
     flagged_generic_or_search: 0,
     flagged_low_quality: 0,
@@ -221,6 +222,7 @@ export async function POST(req: NextRequest) {
         action = 'flagged'
         if (verification.status === 'aggregator') { counters.flagged_aggregator++; flagReason = 'aggregator' }
         else if (verification.status === 'no_apply_mechanism') { counters.flagged_no_apply++; flagReason = 'no apply flow' }
+        else if (verification.status === 'account_wall') { counters.flagged_account_wall++; flagReason = 'requires account/sign-in to apply' }
         else if (verification.status === 'generic' || verification.status === 'redirect') { counters.flagged_generic_or_search++; flagReason = 'generic/search page' }
         else { counters.flagged_expired_or_dead++; flagReason = 'expired or dead' }
       } else if (quality.score < MIN_QUALITY_SCORE) {
@@ -300,6 +302,7 @@ export async function POST(req: NextRequest) {
     breakdown: {
       aggregator: counters.flagged_aggregator,
       no_apply_flow: counters.flagged_no_apply,
+      account_wall: counters.flagged_account_wall,
       expired_or_dead: counters.flagged_expired_or_dead,
       generic_or_search: counters.flagged_generic_or_search,
       low_quality: counters.flagged_low_quality,

@@ -111,10 +111,15 @@ export function ApplyConfirmSheet() {
               Quick check
             </p>
             <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--et-ink)', letterSpacing: '-0.02em', lineHeight: 1.25 }}>
-              Did you apply to {pending.title}?
+              {pending.contactMethod === 'call' && `Did you get through to ${pending.company}?`}
+              {pending.contactMethod === 'text' && `Did you text ${pending.company}?`}
+              {pending.contactMethod === 'email' && `Did you email ${pending.company}?`}
+              {!pending.contactMethod && `Did you apply to ${pending.title}?`}
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--et-muted)', marginTop: 4, marginBottom: 18 }}>
-              {pending.company} — we&apos;ll track it so you can follow up later.
+              {pending.contactMethod
+                ? `${pending.title} — we'll track it so you can follow up later.`
+                : `${pending.company} — we'll track it so you can follow up later.`}
             </p>
 
             <div className="flex flex-col gap-2.5">
@@ -125,7 +130,10 @@ export function ApplyConfirmSheet() {
                 className="btn-primary"
                 style={{ height: 48, borderRadius: 'var(--radius-md)', fontSize: '15px', fontWeight: 700 }}
               >
-                {saving ? 'Saving…' : 'Yes, I applied ✓'}
+                {saving ? 'Saving…' : pending.contactMethod === 'call' ? 'Yes, I talked to them ✓'
+                  : pending.contactMethod === 'text' ? 'Yes, I sent it ✓'
+                  : pending.contactMethod === 'email' ? 'Yes, I sent it ✓'
+                  : 'Yes, I applied ✓'}
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.97 }}

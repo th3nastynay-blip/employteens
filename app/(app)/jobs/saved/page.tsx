@@ -125,7 +125,7 @@ export default function JobsTrackerPage() {
 
   return (
     <div className="flex flex-col">
-      <div className="px-5 pt-12 pb-4">
+      <div className="px-5 pt-safe-header pb-4">
         <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--et-ink)' }}>
           My Jobs
         </h1>

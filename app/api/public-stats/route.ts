@@ -44,7 +44,15 @@ export async function GET() {
         verified_today: verifiedTodayRes.count ?? 0,
         employers,
       },
-      { headers: { 'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200' } },
+      // Was s-maxage=600, stale-while-revalidate=1200 — up to ~30 min of a
+      // STALE homepage number after any bulk dedup/cleanup/audit run (real
+      // gap found 2026-07-25: homepage said 581, live count was 166 — a
+      // trust-audit sweep had just dropped hundreds of rows and the edge
+      // cache hadn't caught up). This is the exact number the product's own
+      // trust pitch leans on, so a 3.5x-stale value sitting for half an
+      // hour is a real problem, not a cosmetic one. Shortened so it
+      // self-heals fast without removing caching entirely.
+      { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } },
     )
   } catch {
     return NextResponse.json({ active_jobs: 0, verified_today: 0, employers: 0 })

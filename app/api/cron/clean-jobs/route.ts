@@ -17,6 +17,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { verifyBatch, isGenericCareerPage } from '@/lib/jobs/verify-url'
 import { runLocalIngest } from '@/lib/jobs/local-ingest'
 import { runWorkdayIngest } from '@/lib/jobs/workday-ingest'
+import { runSmbPhoneIngest } from '@/lib/jobs/smb-phone-ingest'
 
 // Hobby plan caps functions at 10s by default; 60s is the max Hobby allows.
 export const maxDuration = 60
@@ -71,6 +72,20 @@ export async function GET(req: NextRequest) {
     console.log('[cron/clean-jobs] workday ingest failed (continuing cleanup):', String(err).slice(0, 200))
   }
 
+  // ── 0.6. Call/text-to-apply small business directory (same constraint) ──
+  // Human-verified phone entries only (see smb-phone-sources.ts). This also
+  // enforces each entry's humanReverifyBy expiry — no URL to re-check, so
+  // this daily pass IS the staleness safety net for this whole category.
+  try {
+    const smbPhone = await runSmbPhoneIngest(supabase)
+    results.smb_phone_verified = smbPhone.verified
+    results.smb_phone_inserted = smbPhone.inserted
+    results.smb_phone_rejected_unverified = smbPhone.rejected_unverified_contact
+    results.smb_phone_rejected_stale = smbPhone.rejected_stale_contact
+  } catch (err) {
+    console.log('[cron/clean-jobs] smb-phone ingest failed (continuing cleanup):', String(err).slice(0, 200))
+  }
+
   // dejobs (McDonald's DirectEmployers) ingestion REMOVED from the daily
   // run 2026-07-13: the site serves a JS shell to server fetches — the job
   // list AND posting pages are client-rendered, so dead postings could
@@ -79,11 +94,17 @@ export async function GET(req: NextRequest) {
   // their JSON API is identified.
 
   // ── 1. Re-verify the oldest-checked active jobs ────────────────────────
+  // apply_method='url' only — phone-contact jobs have no fetchable URL
+  // (apply_url is a synthetic tel: string) and are entirely owned by
+  // smb-phone-ingest.ts's own alwaysVerify cycle above. Without this filter,
+  // verifyBatch would fetch() a tel: URI, get a hard error, and deactivate
+  // every human-verified phone job within a day of it going live.
   const { data: jobsToCheck } = await supabase
     .from('jobs')
     .select('id, apply_url, title, company, location, source')
     .eq('status', 'active')
     .eq('is_active', true)
+    .eq('apply_method', 'url')
     .order('last_checked_at', { ascending: true, nullsFirst: true })
     .limit(BATCH_SIZE)
 
@@ -150,6 +171,10 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 3. Deactivate jobs not verified in MAX_AGE_DAYS ──────────────────────
+  // apply_method='url' only — phone jobs have their OWN expiry rule
+  // (human_reverify_by, typically ~21 days, enforced by smb-phone-ingest.ts
+  // above). This generic 14-day cutoff is calibrated for URL re-verification
+  // cadence and would fight with that separate schedule otherwise.
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - MAX_AGE_DAYS)
 
@@ -160,6 +185,7 @@ export async function GET(req: NextRequest) {
       { count: 'exact' },
     )
     .eq('status', 'active')
+    .eq('apply_method', 'url')
     .or(`last_verified_at.is.null,last_verified_at.lt.${cutoff.toISOString()}`)
 
   results.deactivated_expired = expiredCount ?? 0

@@ -341,7 +341,7 @@ export default function CareerPage() {
     >
       {/* ── Header ── */}
       <div
-        className="flex-shrink-0 px-5 pt-12 pb-4"
+        className="flex-shrink-0 px-5 pt-safe-header pb-4"
         style={{ borderBottom: '1px solid var(--et-border)' }}
       >
         <div className="flex items-center gap-3">

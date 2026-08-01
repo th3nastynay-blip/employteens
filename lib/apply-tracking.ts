@@ -16,13 +16,15 @@ export interface PendingApply {
   title: string
   company: string
   ts: number
+  /** Human-contact job — ApplyConfirmSheet's copy branches on which channel */
+  contactMethod?: 'call' | 'text' | 'email'
 }
 
 const PENDING_KEY = 'et-pending-apply'
 const OPT_OUT_KEY = 'et-apply-prompt-off'
 const MAX_AGE_MS = 24 * 60 * 60 * 1000 // stale after 24h — don't ask about last week
 
-export function recordApplyClick(job: { id: string; title: string; company: string }) {
+export function recordApplyClick(job: { id: string; title: string; company: string; contactMethod?: 'call' | 'text' | 'email' }) {
   try {
     if (localStorage.getItem(OPT_OUT_KEY) === '1') return
     const pending: PendingApply = {
@@ -30,6 +32,7 @@ export function recordApplyClick(job: { id: string; title: string; company: stri
       title: job.title,
       company: job.company,
       ts: Date.now(),
+      contactMethod: job.contactMethod,
     }
     localStorage.setItem(PENDING_KEY, JSON.stringify(pending))
   } catch {

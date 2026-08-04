@@ -30,11 +30,12 @@ import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from '@/lib/jobs/q
 
 export const maxDuration = 60
 
-// v3: default-deny destination policy (known ATS or employer domain only) —
-// re-audits EVERYTHING, including rows revived by revive-dedupe that carried
-// pre-strict-era "verified" statuses and were never re-checked (that's how a
-// jobilize.com link reached a real user).
-const AUDIT_MARK = '_audited:v3'
+// v4 (2026-08-01): account-wall detection + tightened isTrustedDestination
+// (full-company-name match instead of any single generic token) — same
+// reasoning as the v3 bump: a rules change means every previously-audited
+// row needs a fresh pass, or it silently keeps whatever verdict the OLD
+// rules gave it forever. Re-audits EVERYTHING again.
+const AUDIT_MARK = '_audited:v4'
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')

@@ -194,6 +194,31 @@ export const LOCAL_SOURCES: LocalSourceEntry[] = [
     job_type: 'program',
     activeMonths: ALL_YEAR,
   },
+  // ── Clifton (family-owned regional grocery, not a franchise) ───────────
+  {
+    // Verified 2026-08-01 via direct fetch: corradosmarket.com/careers has a
+    // genuine embedded application form on their own domain — name, address,
+    // position desired, no login, no third-party account. Family-owned NJ
+    // grocery (Clifton, Denville, Fairfield, North Arlington, Wayne),
+    // multi-location so more "regional small grocer" than single-shop
+    // independent, but real and direct — no account wall, no aggregator hop.
+    // Generic /careers/ URL shape, same treatment as the municipal program
+    // pages: isProgramPage skips the specific-job-ID requirement, still
+    // checked for HTTP liveness + closed-application language.
+    title: 'General Application — All Departments',
+    tags: ['Family-owned', 'Multiple NJ locations', 'Direct application'],
+    company: "Corrado's Market",
+    location: 'Clifton, NJ',
+    city: 'Clifton',
+    state: 'NJ',
+    zip_code: '07011',
+    apply_url: 'https://www.corradosmarket.com/careers/',
+    description:
+      "Corrado's Family Affair is a family-owned NJ grocer (Clifton, Denville, Fairfield, North Arlington, Wayne) hiring for cashier, deli, bakery, and stock roles. Their own careers page has a direct application form — no account or third-party login required. Min age not independently confirmed; treat 16 as the conservative floor until a specific posting states otherwise.",
+    min_age: 16,
+    job_type: 'part-time',
+    activeMonths: ALL_YEAR,
+  },
   // TODO(research): confirmed program pages not yet found for Hoboken,
   // North Bergen, Kearny, Weehawken, Guttenberg, Harrison, and East Newark
   // recreation/youth employment. Do NOT add entries without a verified URL —

@@ -152,6 +152,13 @@ const TRUSTED_ATS_DOMAINS = [
   'oraclecloud.com', 'successfactors.com', 'dayforcehcm.com', 'mchire.com',
   'harri.com', 'workable.com', 'recruitee.com', 'ripplinghire.com',
   'gr8people.com', 'eightfold.ai', 'avature.net', 'wd1.myworkdaysite.com',
+  // Added 2026-08-01: found via Uncle Giuseppe's Marketplace's own careers
+  // page (uncleg.com/careers) — every apply link routes through UKG's
+  // RapidHire product. UKG (Ultimate Kronos Group) already had ultipro.com
+  // trusted; this is a different UKG product on a different domain. Legit
+  // enterprise ATS, not a redirect/aggregator — trusting the domain
+  // generically since other employers likely use the same platform.
+  'rapidhire.ukg.net',
 ]
 
 const COMPANY_STOPWORDS = new Set([

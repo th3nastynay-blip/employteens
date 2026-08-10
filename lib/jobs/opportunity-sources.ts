@@ -904,6 +904,201 @@ OPPORTUNITY_SOURCES.push(
   },
 )
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VIRTUAL NATIONAL PROGRAMS — the correction batch
+//
+// An earlier analysis in this file concluded the competitor directory was
+// mostly other-metro local volunteering, based on searching entry TITLES for
+// city names. That was a bad proxy: the location lives in a field, not the
+// name, and the sample skewed to the alphabetical head of the list ("826
+// Valencia", "A Place at the Table"), which is exactly where local org names
+// cluster.
+//
+// The real distribution is heavily virtual and national — NASA citizen
+// science, FAA design challenges, university online courses, student-run
+// tutoring nonprofits — plus a genuine NJ cluster. Virtual carries no
+// geography problem at all, which makes it the best answer to thin local
+// supply: a 14-year-old with no working papers and no way to get anywhere can
+// start most of these tonight.
+// ─────────────────────────────────────────────────────────────────────────────
+
+OPPORTUNITY_SOURCES.push(
+  {
+    title: 'NASA Citizen Science projects',
+    org: 'NASA',
+    slug: 'nasa-citizen-science',
+    apply_url: 'https://science.nasa.gov/citizen-science/',
+    description:
+      'NASA runs dozens of open projects where volunteers do real analysis: inspecting telescope images for asteroids, reporting ice conditions, logging precipitation. No application, no age minimum, no cost, and contributions have led to named credits on published papers. Start in an evening and stop whenever.',
+    kind: 'volunteer',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always open across dozens of projects.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'hours',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'No age limit', 'Real research'],
+  },
+  {
+    title: 'FAA Airport Design Challenge',
+    org: 'Federal Aviation Administration',
+    slug: 'faa-airport-design-challenge',
+    apply_url: 'https://www.faa.gov/education/airport_design_challenge',
+    description:
+      'Design a working airport in Minecraft while going through FAA engineering modules. Free, virtual, and open to K-12, which makes it one of the very few genuine engineering competitions available below 9th grade. Team or solo.',
+    kind: 'competition',
+    delivery: 'virtual',
+    eligible_regions: ['US'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'annual',
+    windowNote: 'Registration runs through the summer with an autumn build season.',
+    activeMonths: [6, 7, 8, 9, 10, 11],
+    evidence_kind: 'award',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'Open below grade 9', 'Engineering'],
+  },
+  {
+    title: 'Flight Path Cybersecurity Competition',
+    org: 'Air & Space Forces Association',
+    slug: 'flight-path-cyber',
+    apply_url: 'https://www.codermerlin.academy/narp/flight-path/',
+    description:
+      'A nationwide online round mixing Capture the Flag puzzles with coding challenges, built for high school teams. Virtual, so there is no travel, and cybersecurity CTFs are one of the few areas where a self-taught teenager can genuinely outperform a well-funded school program.',
+    kind: 'competition',
+    delivery: 'virtual',
+    eligible_regions: ['US'],
+    language: 'en',
+    min_grade: 9,
+    max_grade: 12,
+    recurrence: 'annual',
+    windowNote: 'Online round runs in the late summer and autumn.',
+    activeMonths: [7, 8, 9, 10, 11],
+    evidence_kind: 'award',
+    rung_from: 1,
+    rung_to: 3,
+    tags: ['Virtual', 'Team', 'Cybersecurity'],
+  },
+  {
+    title: 'Great Sunflower Project',
+    org: 'Great Sunflower Project',
+    slug: 'great-sunflower-project',
+    apply_url: 'https://www.greatsunflower.org/',
+    description:
+      'Count pollinators on plants near you and submit the observations to a national conservation dataset. Takes fifteen minutes at a time, needs nothing but a phone, and the data is genuinely used. A realistic way to log consistent hours over a summer.',
+    kind: 'volunteer',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Observations run through the growing season, spring to autumn.',
+    activeMonths: [4, 5, 6, 7, 8, 9, 10],
+    evidence_kind: 'hours',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'No age limit', 'Citizen science'],
+  },
+  {
+    title: 'AwesomeMath Academy',
+    org: 'AwesomeMath',
+    slug: 'awesomemath-academy',
+    apply_url: 'https://www.awesomemath.org/',
+    description:
+      'Twelve-week live online advanced-maths courses aimed at competition preparation, for middle and high school. Genuinely rigorous and taught live rather than self-paced. This one costs money, so check the current fee and any aid before committing.',
+    kind: 'program',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 7,
+    max_grade: 12,
+    recurrence: 'rolling',
+    windowNote: 'Courses run in terms through the year.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'certificate',
+    rung_from: 1,
+    rung_to: 2,
+    tags: ['Paid', 'Virtual', 'Live teaching', 'Maths'],
+  },
+  {
+    title: 'Johns Hopkins CTY online courses',
+    org: 'Johns Hopkins Center for Talented Youth',
+    slug: 'jhu-cty-online',
+    apply_url: 'https://cty.jhu.edu/',
+    description:
+      'Live online courses in computer science, maths, writing and science, including Arduino and robotics tracks. Well taught and well regarded. Admission usually requires a qualifying test score, and tuition is significant, though CTY does offer financial aid worth asking about.',
+    kind: 'program',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 7,
+    max_grade: 12,
+    recurrence: 'rolling',
+    windowNote: 'Sessions run year-round with rolling enrolment.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'certificate',
+    rung_from: 1,
+    rung_to: 2,
+    tags: ['Paid', 'Financial aid available', 'Virtual', 'Selective'],
+  },
+  {
+    title: 'Project Learning Tree green career resources',
+    org: 'Sustainable Forestry Initiative',
+    slug: 'project-learning-tree',
+    apply_url: 'https://www.plt.org/',
+    description:
+      'Career exploration for forestry, conservation and environmental work, including a quiz that maps interests to actual green jobs and their entry requirements. Not a credential, but genuinely useful if you have no idea what you want and want something concrete to react to.',
+    kind: 'program',
+    delivery: 'virtual',
+    eligible_regions: ['US'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always available.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'certificate',
+    rung_from: 0,
+    rung_to: 1,
+    tags: ['Free', 'Virtual', 'Career exploration'],
+  },
+  {
+    title: 'Teen Advisory Board',
+    org: 'Jersey City Free Public Library',
+    slug: 'jcfpl-teen-advisory-board',
+    apply_url: 'https://www.jclibrary.org/teens',
+    description:
+      'Teens on the board help plan and run library events and programming for other teens. Different from general volunteering: you hold an actual position with responsibility, which is what turns into a title on an application and a librarian who can speak to your judgement rather than just your attendance.',
+    kind: 'org_role',
+    delivery: 'in_person',
+    eligible_regions: ['US-NJ'],
+    language: 'en',
+    min_grade: 8,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Recruits through the school year, ask at any branch.',
+    activeMonths: ALL_YEAR,
+    supervised: true,
+    evidence_kind: 'title',
+    rung_from: 0,
+    rung_to: 3,
+    tags: ['Free', 'Jersey City', 'Open at 14', 'Real responsibility'],
+  },
+)
+
 /** Entries whose season is open this month. Empty activeMonths means always. */
 export function inSeasonOpportunities(month = new Date().getMonth() + 1): OpportunitySource[] {
   return OPPORTUNITY_SOURCES.filter(

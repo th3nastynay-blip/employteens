@@ -95,6 +95,10 @@ export function toJobRow(o: OpportunitySource, month: number) {
     cost_cents: o.cost_cents ?? null,
     cost_unknown: o.cost_cents === undefined,
     recurrence: o.recurrence,
+    // Prose, not a date. A closed card says "Opens around May, entries close
+    // late October" rather than just "closed", which is the difference between
+    // a teen writing it off and a teen setting a reminder.
+    window_note: o.windowNote,
     deadline: o.deadline?.date ?? null,
     evidence_kind: o.evidence_kind,
     rung_from: o.rung_from,

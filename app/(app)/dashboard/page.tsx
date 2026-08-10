@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { FeedSection } from '@/components/jobs/FeedSection'
 import { GetReadyMode } from '@/components/dashboard/GetReadyMode'
+import { RungCard } from '@/components/dashboard/RungCard'
+import { useRouter } from 'next/navigation'
+import type { NextAction } from '@/lib/rungs'
 import { computeMatchScore } from '@/lib/ai/match-engine'
 import type { JobMatch, UserProfile, JobRow } from '@/lib/types/database'
 
@@ -22,7 +25,18 @@ const SCAN_STATES = [
   'Ranking by fit…',
 ]
 
+/** Where each ladder action sends the teen. Kept next to the router so the
+ *  rung logic in lib/rungs.ts stays free of routing concerns. */
+const RUNG_ROUTES: Record<NextAction['target'], string> = {
+  papers: '/career?ask=working-papers',
+  feed: '/jobs',
+  tracker: '/jobs/saved',
+  coach: '/career',
+  roadmap: '/career?ask=roadmap',
+}
+
 export default function DashboardPage() {
+  const router = useRouter()
   const [userName, setUserName] = useState('')
   const [userAge, setUserAge] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<FeedTab>('best_matches')
@@ -273,6 +287,15 @@ export default function DashboardPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ── Where you are on the ladder, and the next two moves ──
+          Shown to everyone, not just under-16s. The ladder is one climb: a
+          14-year-old is earlier on it, not in a separate consolation mode. */}
+      {!isLoading && (
+        <div className="px-5">
+          <RungCard onNavigate={(a) => router.push(RUNG_ROUTES[a.target])} />
+        </div>
+      )}
 
       {/* ── Get Ready mode: honest experience for 14–15 year olds ── */}
       {!isLoading && userAge !== null && userAge <= 15 && (

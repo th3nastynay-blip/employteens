@@ -32,9 +32,16 @@ import {
 interface Props {
   /** Router push, injected so this component stays free of routing concerns. */
   onNavigate?: (action: NextAction) => void
+  /**
+   * Reports the detected rung upward. The dashboard uses it to decide whether
+   * to show the supporting "things you can do now" section, which is keyed on
+   * rung rather than age — a 16-year-old with no working papers needs the same
+   * help as a 14-year-old, and the ladder is one climb.
+   */
+  onRung?: (rung: Rung) => void
 }
 
-export function RungCard({ onNavigate }: Props) {
+export function RungCard({ onNavigate, onRung }: Props) {
   const [rung, setRung] = useState<Rung | null>(null)
   const [age, setAge] = useState<number | null>(null)
   const [stats, setStats] = useState({ applied: 0, replied: 0, hired: 0 })
@@ -90,6 +97,7 @@ export function RungCard({ onNavigate }: Props) {
 
       setRung(result.rung)
       setAge((profile?.age as number) ?? null)
+      onRung?.(result.rung)
       setStats({
         applied: events.filter((e) => e.applied_at).length,
         replied: events.filter((e) => e.first_response_at || e.outcome === 'interview' || e.outcome === 'hired').length,
@@ -102,7 +110,7 @@ export function RungCard({ onNavigate }: Props) {
       /* dashboard still works without the card */
     }
     setLoading(false)
-  }, [])
+  }, [onRung])
 
   useEffect(() => {
     // Same convention as app/(app)/jobs/saved/page.tsx: `load` is async, so the

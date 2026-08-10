@@ -7,7 +7,7 @@ import { FeedSection } from '@/components/jobs/FeedSection'
 import { GetReadyMode } from '@/components/dashboard/GetReadyMode'
 import { RungCard } from '@/components/dashboard/RungCard'
 import { useRouter } from 'next/navigation'
-import type { NextAction } from '@/lib/rungs'
+import type { NextAction, Rung } from '@/lib/rungs'
 import { computeMatchScore } from '@/lib/ai/match-engine'
 import type { JobMatch, UserProfile, JobRow } from '@/lib/types/database'
 
@@ -37,6 +37,7 @@ const RUNG_ROUTES: Record<NextAction['target'], string> = {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const [rung, setRung] = useState<Rung | null>(null)
   const [userName, setUserName] = useState('')
   const [userAge, setUserAge] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<FeedTab>('best_matches')
@@ -234,37 +235,30 @@ export default function DashboardPage() {
           Good {timeLabel}{userName ? `, ${userName}` : ''} 👋
         </motion.p>
 
-        <motion.h1
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.07 }}
-          style={{
-            fontSize: '26px',
-            fontWeight: 800,
-            color: 'var(--et-ink)',
-            letterSpacing: '-0.03em',
-            marginTop: '3px',
-            lineHeight: 1.15,
-          }}
-        >
-          {isLoading
-            ? 'Finding your matches…'
-            : totalCount > 0
-            ? `${totalCount} jobs matched for you`
-            : 'Your job feed'}
-        </motion.h1>
-
-        <div style={{ marginTop: '6px', height: '18px' }}>
-          <AnimatePresence mode="wait">
-            {isLoading ? (
-              <motion.div
-                key={scanIdx}
-                initial={{ opacity: 0, y: 4 }}
+        {/* Only the loading state gets a headline. Once loaded, RungCard below
+            is the anchor — it says where the teen is, which is more useful than
+            a count of our inventory. Three stacked headers all saying versions
+            of the same thing was the pre-consolidation state. */}
+        <AnimatePresence mode="wait">
+          {isLoading && (
+            <motion.div key="scanning" exit={{ opacity: 0, y: -4 }}>
+              <motion.h1
+                initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.2 }}
-                className="flex items-center gap-2"
+                transition={{ delay: 0.07 }}
+                style={{
+                  fontSize: '26px',
+                  fontWeight: 800,
+                  color: 'var(--et-ink)',
+                  letterSpacing: '-0.03em',
+                  marginTop: '3px',
+                  lineHeight: 1.15,
+                }}
               >
+                Finding your matches…
+              </motion.h1>
+
+              <div className="flex items-center gap-2" style={{ marginTop: '6px', height: '18px' }}>
                 <div className="flex gap-1">
                   <span className="typing-dot" />
                   <span className="typing-dot" />
@@ -273,19 +267,10 @@ export default function DashboardPage() {
                 <span style={{ fontSize: '12px', color: 'var(--et-blue)', fontWeight: 600 }}>
                   {SCAN_STATES[scanIdx]}
                 </span>
-              </motion.div>
-            ) : (
-              <motion.p
-                key="ready"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                style={{ fontSize: '12px', color: 'var(--et-placeholder)' }}
-              >
-                {totalCount > 0 ? 'AI-matched · ranked by fit' : 'AI feed · updated daily'}
-              </motion.p>
-            )}
-          </AnimatePresence>
-        </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Where you are on the ladder, and the next two moves ──
@@ -293,12 +278,20 @@ export default function DashboardPage() {
           14-year-old is earlier on it, not in a separate consolation mode. */}
       {!isLoading && (
         <div className="px-5">
-          <RungCard onNavigate={(a) => router.push(RUNG_ROUTES[a.target])} />
+          <RungCard
+            onNavigate={(a) => router.push(RUNG_ROUTES[a.target])}
+            onRung={setRung}
+          />
         </div>
       )}
 
-      {/* ── Get Ready mode: honest experience for 14–15 year olds ── */}
-      {!isLoading && userAge !== null && userAge <= 15 && (
+      {/* ── Things you can do right now ──
+          Gated on RUNG, not age. Get Ready mode used to fire for under-16s and
+          carry its own competing header, which meant a 14-year-old read three
+          versions of "you can't work yet" stacked on top of each other. Keyed
+          on rung it serves the actual need: anyone at rungs 0–2 has nothing on
+          their record yet, whether they're 14 or 17. */}
+      {!isLoading && rung !== null && rung <= 2 && userAge !== null && (
         <GetReadyMode age={userAge} />
       )}
 

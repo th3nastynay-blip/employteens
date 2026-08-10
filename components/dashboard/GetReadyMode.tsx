@@ -39,28 +39,18 @@ export function GetReadyMode({ age }: { age: number }) {
 
   return (
     <div className="px-4 pb-2 flex flex-col gap-5">
-      {/* ── Honest header ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease }}
-        className="card-elevated px-5 py-5"
-        style={{ background: 'linear-gradient(135deg, #EFF6FF, #F5F3FF)' }}
-      >
-        <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--et-blue)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
-          Get Ready mode · Age {age}
-        </p>
-        <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--et-ink)', letterSpacing: '-0.02em', lineHeight: 1.25 }}>
-          Real talk: most employers start at 16.
-        </h2>
-        <p style={{ fontSize: '14px', color: 'var(--et-subtle)', marginTop: 6, lineHeight: 1.5 }}>
-          But you can earn money <strong>this week</strong> — no working papers needed for the gigs below. And when a verified {age}+ job appears, it shows up right here.
-        </p>
-      </motion.div>
-
-      {/* ── Earn now ── */}
+      {/* ── Earn now ──
+          The competing header that used to sit here ("Real talk: most employers
+          start at 16") was removed during consolidation. RungCard above already
+          says where the teen stands, and two cards making the same point back
+          to back read as an app arguing with itself. Its one genuinely useful
+          line survives as this section's subtitle. */}
       <div>
-        <p className="section-label mb-2">Earn now — no working papers needed</p>
+        <p className="section-label mb-1">Earn now — no working papers needed</p>
+        <p style={{ fontSize: '13px', color: 'var(--et-muted)', lineHeight: 1.45, marginBottom: 10 }}>
+          You can earn money <strong>this week</strong> with these. None of them need papers,
+          and none of them wait for you to turn 16.
+        </p>
         <div className="grid grid-cols-2 gap-2.5">
           {GIG_GUIDES.map((gig, i) => (
             <motion.button

@@ -53,8 +53,13 @@ export function ApplyConfirmSheet() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        // applied_at is stamped here and nowhere else. Every outcome metric
+        // (time-to-response, when to ask "did they get back to you?") is
+        // measured from it, so it must mean "the teen confirmed they applied",
+        // not "a row was touched".
+        const now = new Date().toISOString()
         await supabase.from('applications').upsert(
-          { user_id: user.id, job_id: pending.jobId, status: 'applied' },
+          { user_id: user.id, job_id: pending.jobId, status: 'applied', applied_at: now, updated_at: now },
           { onConflict: 'user_id,job_id' },
         )
       }

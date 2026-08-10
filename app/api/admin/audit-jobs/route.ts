@@ -24,7 +24,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { verifyJobUrl } from '@/lib/jobs/verify-url'
 import { cleanJobTitle } from '@/lib/jobs/clean-title'
-import { isTeenAppropriateTitle } from '@/lib/jobs/teen-scoring'
+import { isTeenAppropriateTitle, MAX_TEEN_AGE } from '@/lib/jobs/teen-scoring'
+import { resolveAllAgeFacts } from '@/lib/jobs/child-labor'
 import { isInMarket } from '@/lib/jobs/geo'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from '@/lib/jobs/quality-score'
 
@@ -35,7 +36,10 @@ export const maxDuration = 60
 // reasoning as the v3 bump: a rules change means every previously-audited
 // row needs a fresh pass, or it silently keeps whatever verdict the OLD
 // rules gave it forever. Re-audits EVERYTHING again.
-const AUDIT_MARK = '_audited:v4'
+// v5: age re-resolution. Every v4 row was aged by the company-name-only
+// heuristic, so they all need a second pass against the new description-aware
+// resolver.
+const AUDIT_MARK = '_audited:v6'
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -121,7 +125,7 @@ export async function POST(req: NextRequest) {
   // arrays is awkward — so fetch a window and filter.
   const { data: candidates } = await supabase
     .from('jobs')
-    .select('id, title, company, location, apply_url, source, job_type, tags, scam_risk_score, salary_min, description, posted_at')
+    .select('id, title, company, location, apply_url, source, job_type, tags, scam_risk_score, salary_min, description, posted_at, min_age')
     .eq('status', 'active')
     .eq('is_active', true)
     .order('created_at', { ascending: true })
@@ -141,9 +145,18 @@ export async function POST(req: NextRequest) {
     flagged_low_quality: 0,
     flagged_not_teen_job: 0,
     flagged_out_of_market: 0,
+    // Rows whose min_age was wrong — see the age re-resolution block below.
+    flagged_over_age: 0,
+    age_corrected: 0,
+    // Rows that got YOUNGER. This is legal 14 and 15 inventory the old
+    // heuristic was hiding, and it is the number worth watching.
+    age_unlocked: 0,
+    // Legal below 16 but employer policy unconfirmed: the outreach call list.
+    verify_candidates: 0,
     retitled: 0,
     quality_scores: [] as number[],
     samples: [] as { before: string; after: string; company: string; action: string; quality: number }[],
+    age_samples: [] as { company: string; title: string; from: number; to: number; why: string }[],
   }
 
   const queue = [...batch]
@@ -194,6 +207,69 @@ export async function POST(req: NextRequest) {
           }).eq('id', job.id)
         }
         continue
+      }
+
+      // AGE RE-RESOLUTION.
+      // Every row already in the table got its min_age from the old
+      // company-name-only heuristic, which never read the description and
+      // could never return above 16. So live rows exist right now that say
+      // "16+" on a posting whose own text says "must be 18". This re-derives
+      // the age from the description and corrects the row in place. Program
+      // pages keep their hand-verified age.
+      let ageUpdate: Record<string, unknown> | null = null
+      if (!isProgram) {
+        const facts = resolveAllAgeFacts({
+          title: job.title as string,
+          company: job.company as string,
+          description: job.description as string | null,
+          location: job.location as string | null,
+        })
+
+        ageUpdate = {
+          min_age: facts.effective_min_age,
+          legal_min_age: facts.legal_min_age,
+          employer_min_age: facts.employer_min_age,
+          work_state: facts.work_state,
+          min_age_reason: facts.reasons.join('; ').slice(0, 500),
+        }
+
+        if (facts.effective_min_age !== job.min_age) {
+          counters.age_corrected++
+          // Rows moving DOWN are the commercially interesting ones: legally
+          // 14-eligible work the old company-name-only heuristic was hiding.
+          if (facts.effective_min_age < (job.min_age as number)) counters.age_unlocked++
+          if (counters.age_samples.length < 8) {
+            counters.age_samples.push({
+              company: job.company as string,
+              title: String(job.title).slice(0, 60),
+              from: job.min_age as number,
+              to: facts.effective_min_age,
+              why: facts.reasons.join('; ').slice(0, 160),
+            })
+          }
+        }
+
+        // Legal at 14 or 15 but the employer's own policy is unconfirmed.
+        // That is the outreach call list, not a reason to hide the row.
+        if (facts.legal_min_age < 16 && facts.employer_min_age === null) {
+          counters.verify_candidates++
+        }
+
+        // Above 19 nobody on the platform can apply. Flag rather than silently
+        // leave it visible to the oldest users.
+        if (facts.effective_min_age > MAX_TEEN_AGE) {
+          counters.flagged_over_age++
+          if (!dryRun) {
+            await supabase.from('jobs').update({
+              ...ageUpdate,
+              status: 'flagged',
+              is_active: false,
+              tags: [...(((job.tags as string[] | null) ?? []).filter((t) => t !== AUDIT_MARK)), '_q:0', AUDIT_MARK],
+              last_checked_at: new Date().toISOString(),
+            }).eq('id', job.id)
+          }
+          continue
+        }
       }
 
       const verification = await verifyJobUrl(
@@ -260,6 +336,7 @@ export async function POST(req: NextRequest) {
           last_checked_at: new Date().toISOString(),
         }
         if (retitled) update.title = cleaned.title
+        if (ageUpdate) Object.assign(update, ageUpdate)
         if (action === 'flagged') {
           update.status = 'flagged'
           update.is_active = false
@@ -309,8 +386,15 @@ export async function POST(req: NextRequest) {
       low_quality: counters.flagged_low_quality,
       not_teen_job: counters.flagged_not_teen_job,
       out_of_market: counters.flagged_out_of_market,
+      over_age: counters.flagged_over_age,
     },
     retitled: counters.retitled,
+    // How many live rows had the wrong minimum age. A non-zero number here on
+    // the first run is the size of the "sent a 16-year-old to an 18+ job" bug.
+    age_corrected: counters.age_corrected,
+    age_unlocked: counters.age_unlocked,
+    verify_candidates: counters.verify_candidates,
+    age_samples: counters.age_samples,
     avg_quality_score: avg,
     remaining: Math.max(0, unaudited.length - batch.length),
     samples: counters.samples,

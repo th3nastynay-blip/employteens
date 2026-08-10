@@ -17,10 +17,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import { verifyJobUrl, isGenericCareerPage, type VerificationResult } from './verify-url'
-import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, resolveMinAge, isTeenAppropriateTitle } from './teen-scoring'
+import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, isTeenAppropriateTitle, MAX_TEEN_AGE } from './teen-scoring'
+import { resolveAllAgeFacts } from './child-labor'
 import { cleanJobTitle } from './clean-title'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from './quality-score'
-import { zipFromLocation } from './geo'
+import { zipFromLocation, isInMarket } from './geo'
 
 export interface NormalizedJob {
   title: string
@@ -92,6 +93,8 @@ export interface IngestStats {
   rejected_aggregator: number
   rejected_low_quality: number
   rejected_not_teen_job: number
+  /** Outside commute range of Hudson County. See the geo gate below. */
+  rejected_out_of_market: number
   /** Phone-contact entry missing a required human-verification field — never auto-trusted */
   rejected_unverified_contact: number
   /** Phone-contact entry whose humanReverifyBy date has passed — needs a fresh call */
@@ -165,6 +168,7 @@ export async function ingestNormalizedJobs(
     rejected_aggregator: 0,
     rejected_low_quality: 0,
     rejected_not_teen_job: 0,
+    rejected_out_of_market: 0,
     rejected_unverified_contact: 0,
     rejected_stale_contact: 0,
     inserted: 0,
@@ -254,6 +258,43 @@ export async function ingestNormalizedJobs(
         stats.rejected_not_teen_job++
         noteRejection(raw.apply_url, 'not_teen_job', `Adult role title: ${raw.title.slice(0, 60)}`)
         continue
+      }
+
+      // GEO GATE — cheap, runs before any network call.
+      //
+      // This check existed in lib/jobs/geo.ts and was wired into the trust
+      // audit but NEVER into ingest, so ATS and Workday sources dumped their
+      // full national requisition lists straight into the table. Measured
+      // 2026-08-10: 337 of 675 active listings (50%) were unreachable for any
+      // Hudson County teen, including Buffalo, Bridgehampton, Cherry Hill and
+      // one in Rochester Hills, Michigan.
+      //
+      // Program pages are exempt: curated municipal entries sometimes carry a
+      // program name rather than a parseable address.
+      if (!raw.isProgramPage && !isInMarket(raw.location)) {
+        stats.rejected_out_of_market++
+        noteRejection(raw.apply_url, 'out_of_market', `Out of commute range: ${String(raw.location).slice(0, 60)}`)
+        continue
+      }
+
+      // Age gate, BEFORE any network call. The title check above only reads
+      // the title; this reads the description, which is where employers
+      // actually state "must be 18 years of age or older". Anything resolving
+      // above 19 can never be shown to any user on this platform, so ingesting
+      // it only costs verification budget and pollutes the age distribution.
+      if (!raw.isProgramPage) {
+        const age = resolveAllAgeFacts({
+          title: raw.title,
+          company: raw.company,
+          description: raw.description,
+          location: raw.location,
+          declaredMinAge: raw.min_age,
+        })
+        if (age.effective_min_age > MAX_TEEN_AGE) {
+          stats.rejected_not_teen_job++
+          noteRejection(raw.apply_url, 'not_teen_job', `Age ${age.effective_min_age}+ — ${age.reasons.join('; ')}`)
+          continue
+        }
       }
 
       const scamScore = detectScamRisk({
@@ -424,6 +465,18 @@ export async function ingestNormalizedJobs(
         continue
       }
 
+      // Age facts. Curated program pages are hand-verified, so their declared
+      // age is trusted outright (their descriptions are rec-department
+      // marketing copy, not requirements lists).
+      const ageFacts = resolveAllAgeFacts({
+        title: v.raw.title,
+        company: v.raw.company,
+        description: v.raw.description,
+        location: v.raw.location,
+        declaredMinAge: v.raw.min_age,
+        trusted: v.raw.isProgramPage,
+      })
+
       const tags = Array.from(new Set([
         ...(v.raw.tags ?? []),
         ...cleaned.tags,
@@ -450,7 +503,22 @@ export async function ingestNormalizedJobs(
         human_verified_by: isHumanContact ? v.raw.humanVerifiedBy : null,
         human_reverify_by: isHumanContact ? v.raw.humanReverifyBy : null,
         source,
-        min_age: v.raw.min_age ?? resolveMinAge(v.raw.title, v.raw.company),
+        // Curated program pages carry a hand-verified age, so their declared
+        // value is trusted outright (the description is marketing copy written
+        // by a rec department, not a requirements list). Everything else goes
+        // through full resolution: the employer's stated age in the posting
+        // wins, then the declared/source value, then our heuristics, then a
+        // hard legal floor. Passing the description is the whole point — it is
+        // where "must be 18 years of age" actually lives.
+        // Everything else resolves three separate facts and keeps them apart:
+        // what the LAW permits for the occupation, what the EMPLOYER states,
+        // and the effective age we filter on (the higher of the two, plus any
+        // age implied by advertised hours). See lib/jobs/child-labor.ts.
+        min_age: ageFacts.effective_min_age,
+        legal_min_age: ageFacts.legal_min_age,
+        employer_min_age: ageFacts.employer_min_age,
+        work_state: ageFacts.work_state,
+        min_age_reason: ageFacts.reasons.join('; ').slice(0, 500),
         description: v.raw.description?.slice(0, 800) ?? '',
         experience_required: 'none',
         teen_friendly_score: teenScore,

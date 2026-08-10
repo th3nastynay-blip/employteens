@@ -7,31 +7,92 @@
  * rejection. Shared by ingestion and the trust audit.
  */
 
-const IN_MARKET_PATTERNS: RegExp[] = [
-  /\b(ny|nyc|nj)\b/i,
-  /\bnew york\b/i,
-  /\bnew jersey\b/i,
-  /\b(manhattan|brooklyn|queens|bronx|staten island|harlem)\b/i,
-  /\b(hoboken|jersey city|bayonne|union city|west new york|north bergen|secaucus|kearny|weehawken|guttenberg|harrison|east newark)\b/i,
-  /\b(newark|paramus|woodbridge|clifton|hackensack|edgewater|fort lee)\b/i,
-  /\b(albany|buffalo|rochester|syracuse|yonkers|white plains|long island)\b/i,
-  // County-form locations — Adzuna often returns "Belleville, Essex County"
-  // with no state at all. Queries are NY/NJ-scoped, so a NJ/NY county name
-  // without a contradicting out-of-market state is in-market.
-  /\b(hudson|bergen|essex|passaic|union|middlesex|monmouth|morris|ocean|somerset|mercer|camden|burlington|atlantic|gloucester|cumberland|hunterdon|sussex|warren|salem|cape may)\s+county\b/i,
-  /\b(westchester|nassau|suffolk|rockland|putnam|dutchess|orange|erie|monroe|onondaga|kings|richmond)\s+county\b/i,
-]
+/**
+ * MARKET IS COMMUTE RANGE, NOT STATE LINES.
+ *
+ * The previous definition treated anywhere in NY or NJ as in-market: a blanket
+ * `\b(ny|nyc|nj)\b` rule plus an explicit allowlist containing Albany, Buffalo,
+ * Rochester and Syracuse. Live consequences, measured 2026-08-10 against 675
+ * active rows:
+ *
+ *   - 337 of 675 listings (50%) were unreachable for any Hudson County teen.
+ *     Cherry Hill and Glassboro are near Philadelphia. Bridgehampton is on the
+ *     South Fork. Buffalo is 400 miles away.
+ *   - "Rochester Hills MI" got in. The out-of-state check only matched a state
+ *     abbreviation preceded by a comma, so "MI" with no comma slipped past,
+ *     and then `\brochester\b` matched the upstate-NY allowlist. A Michigan
+ *     listing on a Hudson County teen job board.
+ *
+ * A 15-year-old who legally cannot work past 7pm on a school night is not
+ * commuting to Syracuse. Tiers below encode reachability, not geography.
+ */
 
-// States/regions that are definitively NOT our market. If one of these
-// appears as the location's state, in-market city-name coincidences lose
-// ("Manhattan Beach, CA" contains 'manhattan' but ', CA' wins).
-const OUT_OF_MARKET_STATE = /,\s*(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NM|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b|\b(california|texas|florida|washington|oregon|colorado|illinois|georgia|arizona|pennsylvania|massachusetts|virginia|ohio|michigan)\b/i
+/** Hudson County. Walk, bus, or a short light-rail ride. */
+const CORE = /\b(jersey city|hoboken|bayonne|union city|west new york|north bergen|secaucus|kearny|weehawken|guttenberg|harrison|east newark)\b/i
+
+/** One PATH, subway, or bus ride. Realistic for 16+ on a weekend or after school. */
+const TRANSIT = /\b(manhattan|brooklyn|queens|bronx|staten island|harlem|williamsburg|astoria|long island city|greenpoint|bushwick|fresh meadows|flushing|newark|elizabeth|belleville|bloomfield|montclair|east rutherford|edgewater|fort lee|north arlington|nutley)\b/i
+
+/** Reachable with a longer trip or a parent drop-off. Ranked below the above. */
+const EXTENDED = /\b(paramus|hackensack|clifton|passaic|woodbridge|rutherford|lyndhurst|teaneck|englewood|fairview|cliffside park|palisades park|ridgefield|carlstadt|wallington|garfield|yonkers)\b/i
+
+/** Bare "New York, NY" style strings with no city detail. Treated as transit tier. */
+const NYC_GENERIC = /\bnew york\s*(city)?\s*[, ]\s*(ny|new york)\b|\bnyc\b/i
+
+/**
+ * Counties, for sources that return "Belleville, Essex County" with no state.
+ * Only counties actually within commute range. Erie, Monroe and Onondaga
+ * (Buffalo, Rochester, Syracuse) are deliberately absent.
+ */
+const IN_MARKET_COUNTY = /\b(hudson|bergen|essex|passaic|union)\s+county\b/i
+const NYC_COUNTY = /\b(kings|richmond|new york|bronx|queens)\s+county\b/i
+
+/**
+ * Out-of-state detection. Now matches a two-letter state code at the end of the
+ * string with OR without a preceding comma, which is what let "Rochester Hills
+ * MI" through. NY and NJ are excluded from this list for obvious reasons.
+ */
+const OUT_OF_MARKET_STATE =
+  /(?:,\s*|\s+)(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NM|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b|\b(california|texas|florida|washington|oregon|colorado|illinois|georgia|arizona|pennsylvania|massachusetts|virginia|ohio|michigan|connecticut|maryland)\b/i
+
+/**
+ * NY and NJ places that are in-state but far outside commute range. Listed
+ * explicitly because a source returning "Buffalo, NY" passes every state check.
+ */
+const FAR_IN_STATE =
+  /\b(albany|buffalo|rochester|syracuse|ithaca|binghamton|vestal|poughkeepsie|utica|schenectady|niagara|watertown|plattsburgh|elmira|corning|victor|canandaigua|lake grove|bridgehampton|southampton|montauk|riverhead|hauppauge|melville|westbury|middletown|newburgh|kingston|saratoga)\b/i
+const FAR_NJ =
+  /\b(cherry hill|deptford|glassboro|marlton|moorestown|mays landing|vineland|millville|atlantic city|cape may|toms river|howell|freehold|lakewood|brick|manahawkin|burlington|mount laurel|voorhees|washington township|ewing|trenton|hamilton|lawrenceville|princeton|new brunswick|edison|piscataway|bridgewater|raritan|somerville|flemington|phillipsburg|hackettstown|rockaway|dover|morristown|cedar knolls|parlin|sayreville|old bridge|manalapan|marlboro|red bank|middletown township|long branch|asbury park|westfield|cranford|rahway|linden|perth amboy)\b/i
+
+export type MarketTier = 'core' | 'transit' | 'extended' | 'out'
+
+/**
+ * How reachable is this location for a Hudson County teen?
+ * Useful for ranking: a core listing should outrank an extended one even when
+ * both are technically in market.
+ */
+export function marketTier(location: string): MarketTier {
+  const loc = (location ?? '').trim()
+  if (!loc) return 'out'
+
+  // Hard rejections first. An explicit out-of-state marker or a known far-away
+  // place beats any city-name coincidence ("Manhattan Beach, CA", "Rochester
+  // Hills MI", "Middletown, NY").
+  if (OUT_OF_MARKET_STATE.test(loc)) return 'out'
+  if (FAR_IN_STATE.test(loc)) return 'out'
+  if (FAR_NJ.test(loc)) return 'out'
+
+  if (CORE.test(loc) || IN_MARKET_COUNTY.test(loc)) return 'core'
+  if (TRANSIT.test(loc) || NYC_GENERIC.test(loc) || NYC_COUNTY.test(loc)) return 'transit'
+  if (EXTENDED.test(loc)) return 'extended'
+
+  // A bare state name with no recognizable place is not actionable. Previously
+  // this returned true and was the single largest source of junk inventory.
+  return 'out'
+}
 
 export function isInMarket(location: string): boolean {
-  const loc = (location ?? '').trim()
-  if (!loc) return false
-  if (OUT_OF_MARKET_STATE.test(loc)) return false
-  return IN_MARKET_PATTERNS.some((p) => p.test(loc))
+  return marketTier(location) !== 'out'
 }
 
 /**

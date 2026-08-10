@@ -30,7 +30,7 @@ interface TrackedJob {
 
 const TAB_STATUSES: Record<Tab, AppStatus[]> = {
   saved: ['saved'],
-  applied: ['applied', 'interviewing', 'offered'],
+  applied: ['applied', 'interviewing', 'offered', 'hired'],
   archived: ['rejected'],
 }
 
@@ -39,6 +39,9 @@ const STATUS_LABEL: Record<AppStatus, string> = {
   applied: 'Applied',
   interviewing: 'Interview',
   offered: 'Offer',
+  // Deliberately distinct from 'offered'. An offer is not a job, and
+  // conflating them made the platform's headline KPI unmeasurable.
+  hired: 'Hired 🎉',
   rejected: 'Not selected',
 }
 
@@ -47,6 +50,7 @@ const STATUS_COLOR: Record<AppStatus, { bg: string; fg: string }> = {
   applied:      { bg: 'var(--et-blue-light)', fg: 'var(--et-blue)' },
   interviewing: { bg: 'rgba(245,158,11,0.12)', fg: '#B45309' },
   offered:      { bg: 'var(--et-green-light)', fg: 'var(--et-green)' },
+  hired:        { bg: 'var(--et-green-light)', fg: 'var(--et-green)' },
   rejected:     { bg: 'var(--et-surface-2)', fg: 'var(--et-muted)' },
 }
 
@@ -97,13 +101,33 @@ export default function JobsTrackerPage() {
   }, [load])
 
   async function setStatus(jobId: string, status: AppStatus) {
-    setTracked((prev) => prev.map((t) => (t.job.id === jobId ? { ...t, status, updated_at: new Date().toISOString() } : t)))
+    const now = new Date().toISOString()
+    setTracked((prev) => prev.map((t) => (t.job.id === jobId ? { ...t, status, updated_at: now } : t)))
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
+    // A teen tapping "Got an interview" here has already told us the employer
+    // responded. Mirroring that into `outcome` is free data coverage and stops
+    // OutcomeCheckSheet from asking a question they just answered.
+    // 'rejected' is NOT mirrored: the Archive button is also how teens clear
+    // clutter, so it cannot be read as "the employer said no".
+    const MIRROR: Partial<Record<AppStatus, 'interview' | 'hired'>> = {
+      interviewing: 'interview',
+      offered: 'interview',
+      hired: 'hired',
+    }
+    const outcome = MIRROR[status]
+
     await supabase
       .from('applications')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({
+        status,
+        updated_at: now,
+        ...(outcome
+          ? { outcome, outcome_reported_at: now, first_response_at: now }
+          : {}),
+      })
       .eq('user_id', user.id)
       .eq('job_id', jobId)
   }
@@ -235,11 +259,11 @@ export default function JobsTrackerPage() {
                 {/* Status progression controls */}
                 {tab === 'applied' && (
                   <div className="flex gap-2 px-2 mt-2">
-                    {t.status !== 'interviewing' && t.status !== 'offered' && (
+                    {t.status === 'applied' && (
                       <StatusButton label="🎤 Got an interview" onClick={() => setStatus(t.job.id, 'interviewing')} />
                     )}
-                    {t.status !== 'offered' && (
-                      <StatusButton label="🎉 Got an offer" onClick={() => setStatus(t.job.id, 'offered')} />
+                    {t.status !== 'hired' && (
+                      <StatusButton label="🎉 Got hired" onClick={() => setStatus(t.job.id, 'hired')} />
                     )}
                     <StatusButton label="Archive" muted onClick={() => setStatus(t.job.id, 'rejected')} />
                   </div>

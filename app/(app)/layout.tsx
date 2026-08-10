@@ -1,5 +1,6 @@
 import { BottomNav } from '@/components/ui/BottomNav'
 import { ApplyConfirmSheet } from '@/components/jobs/ApplyConfirmSheet'
+import { OutcomeCheckSheet } from '@/components/jobs/OutcomeCheckSheet'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <ApplyConfirmSheet />
+      <OutcomeCheckSheet />
       <BottomNav />
     </div>
   )

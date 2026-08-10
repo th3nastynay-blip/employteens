@@ -150,10 +150,21 @@ export interface ApplicationRow {
   id: string
   user_id: string
   job_id: string
-  status: 'saved' | 'applied' | 'interviewing' | 'offered' | 'rejected'
+  status: 'saved' | 'applied' | 'interviewing' | 'offered' | 'hired' | 'rejected'
   notes?: string | null
   created_at: string
   updated_at?: string
+  /** Stamped only when the teen confirms "yes, I applied". Null = never applied. */
+  applied_at?: string | null
+  /**
+   * What the employer did, self-reported. NULL means UNREPORTED, which is not
+   * the same as 'no_response' (ghosted) — see lib/outcomes.ts.
+   */
+  outcome?: 'no_response' | 'rejected' | 'interview' | 'hired' | 'position_filled' | null
+  outcome_reported_at?: string | null
+  first_response_at?: string | null
+  outcome_checks?: number
+  last_outcome_check_at?: string | null
 }
 
 export interface JobMatchRow {

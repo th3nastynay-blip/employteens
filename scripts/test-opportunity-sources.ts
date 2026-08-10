@@ -82,12 +82,22 @@ for (const o of OPPORTUNITY_SOURCES) {
 }
 
 console.log('\n— evidence honesty —')
-// An open, self-paced, everyone-welcome course cannot produce a reference.
-// Claiming otherwise is the thing that makes a ladder fake.
+// A reference requires a named human who would take the call. That is about
+// SUPERVISION, not delivery format: Crisis Text Line is virtual and rolling and
+// produces a real reference (application, 30 hours of training, a supervisor),
+// while MIT OpenCourseWare is virtual and rolling and produces nothing, because
+// nobody there knows you exist. Claiming otherwise is what makes a ladder fake.
 for (const o of OPPORTUNITY_SOURCES) {
-  if (o.delivery === 'virtual' && o.recurrence === 'rolling') {
+  if (o.evidence_kind === 'reference') {
     check(
-      `${o.slug} (open + self-paced) does not claim to produce a reference`,
+      `${o.slug} claims a reference and has a supervisor`,
+      o.supervised === true,
+      'no supervisor — should be hours or certificate',
+    )
+  }
+  if (o.delivery === 'virtual' && o.recurrence === 'rolling' && !o.supervised) {
+    check(
+      `${o.slug} (unsupervised, open, self-paced) does not claim a reference`,
       o.evidence_kind !== 'reference',
       `claims ${o.evidence_kind}`,
     )

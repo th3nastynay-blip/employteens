@@ -58,11 +58,35 @@ export interface OpportunitySource {
   recurrence: 'annual' | 'seasonal' | 'rolling' | 'one_time'
   /** Plain-English description of the yearly cycle. Shown instead of a date. */
   windowNote: string
+  /**
+   * A real deadline, but ONLY when read from the organiser's own site, with the
+   * date we read it. Never from memory and never carried over from last year.
+   *
+   * The ban on hardcoded dates exists because congressionalappchallenge.us was
+   * still advertising 2025 dates in August 2026. It is not a ban on accuracy:
+   * when the source page is demonstrably current we should say so, and the
+   * `verifiedOn` stamp is what lets the UI age it out gracefully ("we checked
+   * this in August") instead of asserting it forever.
+   */
+  deadline?: { date: string; verifiedOn: string; source: string }
   /** Months the entry should be live. Empty means all year. */
   activeMonths?: number[]
 
   /** What finishing this actually produces. Drives evidence-strength sorting. */
   evidence_kind: 'hours' | 'title' | 'award' | 'reference' | 'income' | 'certificate'
+  /**
+   * Is there a named human who oversees you and would take a reference call?
+   *
+   * This, not the delivery format, is what separates a reference from a
+   * certificate. Crisis Text Line is virtual and rolling and still produces a
+   * real reference, because there is an application, 30 hours of training, and
+   * a supervisor. MIT OpenCourseWare is also virtual and rolling and produces
+   * nothing of the kind, because nobody there knows you exist.
+   *
+   * A test asserts evidence_kind 'reference' is only ever claimed when this is
+   * true. That is the guard against a ladder whose top rungs are decorative.
+   */
+  supervised?: boolean
   rung_from: number
   rung_to: number
   tags: string[]
@@ -87,7 +111,15 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     max_grade: 12,
     cost_cents: null,
     recurrence: 'annual',
-    windowNote: 'Opens around May, entries close late October. Check the site for this year\'s exact dates.',
+    windowNote: 'Opens around May, entries close late October.',
+    // Read from the organiser's participating-districts page on 2026-08-10.
+    // That page carried a modified date of 2026-08-03, so unlike their student
+    // page (which still showed 2025 dates) this one is demonstrably current.
+    deadline: {
+      date: '2026-10-26',
+      verifiedOn: '2026-08-10',
+      source: 'https://www.congressionalappchallenge.us/students/participating-districts/',
+    },
     activeMonths: [5, 6, 7, 8, 9, 10],
     evidence_kind: 'award',
     rung_from: 1,
@@ -111,6 +143,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     recurrence: 'annual',
     windowNote: 'Season typically runs autumn through spring, with submissions in late spring.',
     activeMonths: [9, 10, 11, 12, 1, 2, 3, 4],
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 1,
     rung_to: 3,
@@ -245,6 +278,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     recurrence: 'seasonal',
     windowNote: 'Summer intake usually recruits in spring; some sites run year-round.',
     activeMonths: [2, 3, 4, 5, 6],
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 1,
     rung_to: 3,
@@ -357,6 +391,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     recurrence: 'rolling',
     windowNote: 'Rolling, with the biggest intake before summer reading season.',
     activeMonths: ALL_YEAR,
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 0,
     rung_to: 3,
@@ -420,6 +455,7 @@ OPPORTUNITY_SOURCES.push(
     recurrence: 'rolling',
     windowNote: 'Rolling intake, with orientation sessions run periodically.',
     activeMonths: ALL_YEAR,
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 0,
     rung_to: 3,
@@ -464,6 +500,7 @@ OPPORTUNITY_SOURCES.push(
     recurrence: 'seasonal',
     windowNote: 'Spring and summer programming; recruiting usually starts in late winter.',
     activeMonths: [2, 3, 4, 5, 6, 7, 8],
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 0,
     rung_to: 3,
@@ -486,6 +523,7 @@ OPPORTUNITY_SOURCES.push(
     recurrence: 'rolling',
     windowNote: 'Ask during the school year; easiest to join at the start of a term.',
     activeMonths: [9, 10, 11, 12, 1, 2, 3, 4, 5],
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 0,
     rung_to: 3,
@@ -508,6 +546,7 @@ OPPORTUNITY_SOURCES.push(
     recurrence: 'rolling',
     windowNote: 'Year-round, arranged directly with the centre.',
     activeMonths: ALL_YEAR,
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 0,
     rung_to: 3,
@@ -530,6 +569,7 @@ OPPORTUNITY_SOURCES.push(
     recurrence: 'seasonal',
     windowNote: 'Summer cohort recruits in late winter and spring.',
     activeMonths: [1, 2, 3, 4, 5],
+    supervised: true,
     evidence_kind: 'reference',
     rung_from: 1,
     rung_to: 3,
@@ -622,6 +662,245 @@ OPPORTUNITY_SOURCES.push(
     rung_from: 0,
     rung_to: 6,
     tags: ['Paid', 'Open at 14', 'NYC residents only', 'Lottery'],
+  },
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIRTUAL AND NATIONAL
+//
+// Virtual carries no distance cost, which makes it the answer to thin local
+// supply: a 14-year-old in Bayonne with no working papers and no way to get
+// anywhere can start most of these tonight. But virtual is NOT the same as
+// "open to everyone" — every entry still declares eligible_regions, because
+// that assumption is exactly what put an Australia-and-New-Zealand-only stock
+// game and a German-language Berlin competition in front of a Jersey City
+// sophomore on the site we studied.
+//
+// Evidence honesty applies harder here. Open self-paced courses are marked
+// 'certificate', not 'reference'. They prove you can teach yourself. They do
+// not produce a human who will pick up the phone, and a test enforces that.
+// ─────────────────────────────────────────────────────────────────────────────
+
+OPPORTUNITY_SOURCES.push(
+  {
+    title: 'MIT OpenCourseWare',
+    org: 'Massachusetts Institute of Technology',
+    slug: 'mit-ocw',
+    apply_url: 'https://ocw.mit.edu/',
+    description:
+      'Full MIT course materials, free, no registration, no deadline. Lecture videos, problem sets, and exams across essentially every subject. Undergraduate level, so expect it to be hard, and expect to need to fill gaps as you go. Nothing here is certified, which means it is worth exactly as much as what you build with it.',
+    kind: 'program',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 9,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always open, entirely self-paced.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'certificate',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'Self-paced', 'No signup'],
+  },
+  {
+    title: 'Khan Academy',
+    org: 'Khan Academy',
+    slug: 'khan-academy',
+    apply_url: 'https://www.khanacademy.org/',
+    description:
+      'Free courses across maths, science, economics, and test prep, pitched at exactly the level most high schoolers need. The most useful thing on here for filling an actual gap rather than decorating an application, and the official SAT practice is free.',
+    kind: 'program',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always open, entirely self-paced.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'certificate',
+    rung_from: 0,
+    rung_to: 1,
+    tags: ['Free', 'Virtual', 'Self-paced', 'Test prep'],
+  },
+  {
+    title: 'freeCodeCamp certifications',
+    org: 'freeCodeCamp',
+    slug: 'freecodecamp',
+    apply_url: 'https://www.freecodecamp.org/',
+    description:
+      'Free, project-based web development certifications. Each one ends with five projects you actually built and can link to, which is the part that matters — the certificate is worth little, the portfolio is worth a lot when you are applying for anything technical.',
+    kind: 'program',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 7,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always open, entirely self-paced.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'certificate',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'Portfolio projects', 'Coding'],
+  },
+  {
+    title: 'Smithsonian Digital Volunteers',
+    org: 'Smithsonian Institution',
+    slug: 'smithsonian-transcription',
+    apply_url: 'https://transcription.si.edu/',
+    description:
+      'Transcribe real historical documents from the Smithsonian collections, from home, in whatever time you have. No minimum commitment and no age gate. Genuinely useful work, and one of the very few virtual volunteering options that is not a thin wrapper on a course.',
+    kind: 'volunteer',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always open, contribute whenever you like.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'hours',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'No age limit', 'Volunteering'],
+  },
+  {
+    title: 'Zooniverse citizen science',
+    org: 'Zooniverse',
+    slug: 'zooniverse',
+    apply_url: 'https://www.zooniverse.org/',
+    description:
+      'Classify galaxies, transcribe field notes, or tag wildlife camera footage for real research projects. Contributions feed published papers, and some projects credit volunteers. Start in five minutes with no application.',
+    kind: 'volunteer',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always open.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'hours',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'Research', 'Start today'],
+  },
+  {
+    title: 'Crisis Text Line volunteer counsellor',
+    org: 'Crisis Text Line',
+    slug: 'crisis-text-line',
+    apply_url: 'https://www.crisistextline.org/become-a-volunteer/',
+    description:
+      'Serious, structured volunteering with roughly 30 hours of real training and a supervisor. Minimum age is 18, so this is one to plan for rather than apply to now, but it is worth knowing about early because the training and the reference are among the strongest anything on this list produces.',
+    kind: 'volunteer',
+    delivery: 'virtual',
+    eligible_regions: ['US'],
+    language: 'en',
+    min_grade: 12,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Rolling cohorts. Note the minimum age is 18.',
+    activeMonths: ALL_YEAR,
+    supervised: true,
+    evidence_kind: 'reference',
+    rung_from: 1,
+    rung_to: 3,
+    tags: ['Free', 'Virtual', '18+ only', 'Real training'],
+  },
+  {
+    title: 'UPchieve free online tutoring volunteer',
+    org: 'UPchieve',
+    slug: 'upchieve',
+    apply_url: 'https://upchieve.org/volunteer',
+    description:
+      'Tutor low-income students in maths and science, on demand, from home. Volunteers must be 16 or older and pass a subject check. Hours are tracked and certified, and there is a real coordinator, which puts it a step above most virtual volunteering.',
+    kind: 'volunteer',
+    delivery: 'virtual',
+    eligible_regions: ['US'],
+    language: 'en',
+    min_grade: 11,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Rolling applications. Minimum age 16.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'hours',
+    rung_from: 1,
+    rung_to: 3,
+    tags: ['Free', 'Virtual', 'Tutoring', 'Hours certified'],
+  },
+  {
+    title: 'National Novel Writing Month',
+    org: 'NaNoWriMo Young Writers Program',
+    slug: 'nanowrimo-ywp',
+    apply_url: 'https://ywp.nanowrimo.org/',
+    description:
+      'Set your own word-count goal and write a novel draft in November, with a young writers version built for under-18s. Free, no selection, and finishing is entirely within your control, which makes it one of the few things on this list where effort alone guarantees a result.',
+    kind: 'competition',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'annual',
+    windowNote: 'Runs every November, with prep in October.',
+    activeMonths: [10, 11],
+    evidence_kind: 'certificate',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'Writing', 'No selection'],
+  },
+  {
+    title: 'John Locke Institute Essay Competition',
+    org: 'John Locke Institute',
+    slug: 'john-locke-essay',
+    apply_url: 'https://www.johnlockeinstitute.com/essay-competition',
+    description:
+      'Write an essay on a set question in philosophy, politics, economics, history, psychology, theology, or law. Free to enter, open worldwide, and genuinely prestigious. Note there is a fee if you are shortlisted and attend the awards dinner, so read the terms before assuming it is free end to end.',
+    kind: 'competition',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 9,
+    max_grade: 12,
+    recurrence: 'annual',
+    windowNote: 'Questions released in the spring, submissions close at the end of June.',
+    activeMonths: [3, 4, 5, 6],
+    evidence_kind: 'award',
+    rung_from: 1,
+    rung_to: 3,
+    tags: ['Free to enter', 'Virtual', 'Writing', 'Selective'],
+  },
+  {
+    title: 'Wikipedia editing',
+    org: 'Wikimedia Foundation',
+    slug: 'wikipedia-editing',
+    apply_url: 'https://en.wikipedia.org/wiki/Wikipedia:Contributing_to_Wikipedia',
+    description:
+      'An honest one: no application, no age limit, no credential, and a permanent public edit history anyone can check. Sustained work on articles in a field you care about is a real, verifiable body of contribution. Most people quit in a week, which is exactly why doing it for a year is worth something.',
+    kind: 'volunteer',
+    delivery: 'virtual',
+    eligible_regions: ['GLOBAL'],
+    language: 'en',
+    min_grade: 6,
+    max_grade: 12,
+    cost_cents: null,
+    recurrence: 'rolling',
+    windowNote: 'Always open. Start with one small edit.',
+    activeMonths: ALL_YEAR,
+    evidence_kind: 'hours',
+    rung_from: 0,
+    rung_to: 2,
+    tags: ['Free', 'Virtual', 'Public record', 'Start today'],
   },
 )
 

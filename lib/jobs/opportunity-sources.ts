@@ -623,7 +623,9 @@ OPPORTUNITY_SOURCES.push(
     title: 'Ladders for Leaders paid internship',
     org: 'NYC Department of Youth & Community Development',
     slug: 'nyc-ladders-for-leaders',
-    apply_url: 'https://www.nyc.gov/site/dycd/services/jobs-internships/ladders-for-leaders.page',
+    // Verified 2026-08-10. The real slug is nyc-ladders-for-leaders, not
+    // ladders-for-leaders; the shorter path 404s.
+    apply_url: 'https://www.nyc.gov/site/dycd/services/jobs-internships/nyc-ladders-for-leaders-students.page',
     description:
       'NYC\'s paid summer internship program placing teens in real companies after a pre-employment training course. Genuinely paid, genuinely competitive, and the training itself is useful. Requires NYC residency, so check before investing time in the application.',
     kind: 'internship',
@@ -634,8 +636,8 @@ OPPORTUNITY_SOURCES.push(
     max_grade: 12,
     cost_cents: null,
     recurrence: 'annual',
-    windowNote: 'Applications typically open in the new year for a summer placement.',
-    activeMonths: [1, 2, 3],
+    windowNote: 'Applications open in the new year and close mid-January for a summer placement.',
+    activeMonths: [11, 12, 1],
     evidence_kind: 'income',
     rung_from: 1,
     rung_to: 6,
@@ -949,7 +951,9 @@ OPPORTUNITY_SOURCES.push(
     title: 'FAA Airport Design Challenge',
     org: 'Federal Aviation Administration',
     slug: 'faa-airport-design-challenge',
-    apply_url: 'https://www.faa.gov/education/airport_design_challenge',
+    // Verified 2026-08-10. The deep /education/... path I first wrote was a 404;
+    // faa.gov/adc is the real short URL and it is live.
+    apply_url: 'https://www.faa.gov/adc',
     description:
       'Design a working airport in Minecraft while going through FAA engineering modules. Free, virtual, and open to K-12, which makes it one of the very few genuine engineering competitions available below 9th grade. Team or solo.',
     kind: 'competition',

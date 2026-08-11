@@ -98,7 +98,16 @@ export function RotatingHeadline() {
         perspective: 600,
       }}
     >
-      <AnimatePresence mode="wait">
+      {/* initial={false} suppresses the enter animation on FIRST paint only.
+          Every character below starts at rotateX(85deg) and opacity 0, which
+          framer renders into the server HTML as inline styles — so without JS
+          the headline is not merely invisible, it is a row of edge-on glyphs.
+          This is the page's <h1> and its social-card text, so it has to be
+          legible before any JS runs. Suppressing the mount animation makes the
+          first headline paint as plain text; every rotation after that still
+          gets the full letter-by-letter flip, which is where the effect is
+          actually noticed. */}
+      <AnimatePresence mode="wait" initial={false}>
         <motion.span
           key={index}
           style={{ display: 'block' }}

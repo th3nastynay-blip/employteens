@@ -398,11 +398,42 @@ export function resolveAllAgeFacts(args: {
     : 0
   if (brandFloor) reasons.push(`brand default ${brandFloor}+`)
 
+  /**
+   * UNKNOWN EMPLOYER POLICY DOES NOT UNLOCK A LISTING BELOW 16.
+   *
+   * This was Math.max(legal, hours, employer ?? 0, brandFloor). With no
+   * employer policy, `employer ?? 0` contributes nothing and effective
+   * collapses to whatever the LAW allows — so the audit "unlocked" Glossier,
+   * Eataly, Blue Bottle and Thuma to 14 on the strength of
+   * "NY permits at 14: mercantile store and retail sales; employer policy
+   * unknown". None of those chains hire 14-year-olds. Every one of those
+   * listings was a dead end for the teen who tapped it.
+   *
+   * The law says what is PERMITTED. It says nothing about who is HIRING. A
+   * legal minimum is a ceiling on our claim, never a substitute for it.
+   *
+   * So: below 16 has to be earned by evidence — the posting states an age, or
+   * a trusted curated source declared one. Both populate employer_min_age.
+   * Absent that we hold at 16.
+   *
+   * This does NOT close off 14 and 15 year olds. It moves that inventory to
+   * where it was always real: curated local sources, municipal programmes and
+   * the opportunity feed, all of which set an age deliberately. What it stops
+   * is manufacturing 14+ inventory out of a statute.
+   */
+  const UNKNOWN_EMPLOYER_FLOOR = 16
+  const unknownEmployerBelow16 =
+    employer_min_age === null && legal.legal_min_age < UNKNOWN_EMPLOYER_FLOOR
+  if (unknownEmployerBelow16) {
+    reasons.push(`held at ${UNKNOWN_EMPLOYER_FLOOR}: law permits ${legal.legal_min_age} but employer policy is unknown`)
+  }
+
   const effective_min_age = Math.max(
     legal.legal_min_age,
     hours.impliedMinAge ?? 0,
     employer_min_age ?? 0,
     brandFloor,
+    unknownEmployerBelow16 ? UNKNOWN_EMPLOYER_FLOOR : 0,
   )
 
   return { legal_min_age: legal.legal_min_age, employer_min_age, effective_min_age, work_state, reasons, legal_matched: legal.matched }

@@ -1,12 +1,29 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Outfit } from 'next/font/google'
 import './globals.css'
 
+/**
+ * Two faces, on purpose.
+ *
+ * Outfit for headlines: geometric, rounded, single-storey 'a'. This is the
+ * highest-leverage change in the redesign — what makes a site read as modern
+ * rather than generic is almost always the display face, not the colour.
+ *
+ * Inter stays for body and UI. Outfit is lovely at 26px and gets muddy at 12px,
+ * which is most of what a teen actually reads on a card.
+ */
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
   display: 'swap',
   weight: ['400', '500', '600', '700', '800'],
+})
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  variable: '--font-display',
+  display: 'swap',
+  weight: ['500', '600', '700', '800'],
 })
 
 export const metadata: Metadata = {
@@ -35,7 +52,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${outfit.variable}`}>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" href="/favicon.ico" sizes="any" />

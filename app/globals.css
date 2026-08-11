@@ -417,3 +417,175 @@ body {
   color: var(--et-blue);
   font-weight: 600;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   REDESIGN LAYER — 2026-08-10
+   Adds only. Nothing above this line was changed, so every existing screen
+   renders as before until it opts into these classes.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Display face for headlines. Body stays on Inter — Outfit is beautiful at
+     26px and muddy at 12px, and most of what a teen reads is 12px. */
+  --font-display: var(--font-display), var(--font-inter), system-ui, sans-serif;
+
+  /* One easing curve for the entire app. Consistency is what makes motion
+     feel designed rather than decorated. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms;
+  --dur-base: 260ms;
+  --dur-slow: 520ms;
+}
+
+/* ─── Display type ──────────────────────────────────────────────────── */
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--et-ink);
+}
+.display-xl { font-size: 30px; }
+.display-lg { font-size: 24px; }
+.display-md { font-size: 19px; letter-spacing: -0.02em; }
+
+/* ─── Numbered sections ─────────────────────────────────────────────────
+   Their strongest recurring device: a large ghosted numeral behind the
+   heading, a small one in the eyebrow. Makes a long scroll read as a
+   sequence rather than a list. */
+.numbered {
+  position: relative;
+}
+.numbered::before {
+  content: attr(data-n);
+  position: absolute;
+  top: -10px;
+  right: 0;
+  font-family: var(--font-display);
+  font-size: 62px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--et-ink);
+  opacity: 0.055;
+  pointer-events: none;
+  user-select: none;
+}
+.numbered-eyebrow {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--et-blue);
+}
+
+/* ─── Gradient surfaces ─────────────────────────────────────────────────
+   .match-gradient already existed and was used on exactly one thing (the
+   match ring). These put the blue→purple to work everywhere it belongs. */
+.grad-border {
+  position: relative;
+  background: var(--et-surface);
+  border-radius: var(--radius-lg);
+}
+.grad-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(135deg, var(--et-match-from), var(--et-match-to));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.grad-panel {
+  background: linear-gradient(135deg, var(--et-match-from) 0%, var(--et-match-to) 100%);
+  color: #fff;
+}
+.grad-panel .display { color: #fff; }
+
+/* ─── Pills ─────────────────────────────────────────────────────────────
+   All listing metadata rides on these. No tables, no dense rows. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--et-surface-2);
+  color: var(--et-subtle);
+}
+.pill-green { background: var(--et-green-light); color: var(--et-green); }
+.pill-blue  { background: var(--et-blue-light);  color: var(--et-blue); }
+.pill-amber { background: var(--et-amber-light); color: var(--et-amber); }
+/* Unconfirmed data is dimmed, never hidden. A teen deciding what they can
+   afford needs to see that we do not know. */
+.pill-muted { background: var(--et-surface-2); color: var(--et-placeholder); }
+
+/* ─── Status dot ────────────────────────────────────────────────────────
+   Green open, amber closing, grey upcoming. Same three states everywhere. */
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  display: inline-block; margin-right: 6px;
+}
+.status-open     { background: var(--et-green); }
+.status-closing  { background: var(--et-amber); }
+.status-upcoming { background: var(--et-placeholder); }
+
+/* ─── Browser chrome frame ──────────────────────────────────────────────
+   For marketing and App Store shots. Costs nothing, makes a young product
+   look established. */
+.chrome-frame {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--et-border-mid);
+  overflow: hidden;
+  background: var(--et-surface);
+  box-shadow: var(--shadow-md);
+}
+.chrome-bar {
+  display: flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 12px;
+  background: var(--et-ground);
+  border-bottom: 1px solid var(--et-border);
+  font-size: 10px; color: var(--et-placeholder);
+}
+.chrome-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--et-border-mid); }
+
+/* ─── Motion ────────────────────────────────────────────────────────────
+   Nothing bounces. Nothing loops. The target is a three-year-old Android,
+   not a Dribbble shot. */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.rise { animation: riseIn var(--dur-base) var(--ease-out) both; }
+.rise-1 { animation-delay: 30ms; }
+.rise-2 { animation-delay: 60ms; }
+.rise-3 { animation-delay: 90ms; }
+.rise-4 { animation-delay: 120ms; }
+.rise-5 { animation-delay: 150ms; }
+
+@keyframes fillTrack { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.fill-track { transform-origin: left; animation: fillTrack var(--dur-slow) var(--ease-out) both; }
+
+@keyframes shimmer { to { background-position: 200% 0; } }
+.skeleton {
+  background: linear-gradient(90deg, var(--et-ground) 25%, var(--et-surface-2) 50%, var(--et-ground) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
+.press { transition: transform var(--dur-fast) var(--ease-out); }
+.press:active { transform: scale(0.97); }
+
+/* A teen on a bus with motion sensitivity gets the content, not the show. */
+@media (prefers-reduced-motion: reduce) {
+  .rise, .fill-track, .skeleton { animation: none !important; }
+  .press:active { transform: none; }
+  * { transition-duration: 0.01ms !important; }
+}

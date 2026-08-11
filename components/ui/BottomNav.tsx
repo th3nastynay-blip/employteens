@@ -34,6 +34,30 @@ const NAV_ITEMS = [
     ),
   },
   {
+    // The EC surface. A compass rather than a trophy: the point is that there
+    // is a whole category here a teen didn't know to look for, not that it is
+    // about winning things.
+    href: '/extracurriculars',
+    label: 'Explore',
+    icon: (active: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <circle
+          cx="11" cy="11" r="8.25"
+          fill={active ? 'var(--et-blue)' : 'none'}
+          stroke={active ? 'var(--et-blue)' : 'var(--et-placeholder)'}
+          strokeWidth="1.5"
+        />
+        <path
+          d="M14.2 7.8L12.5 12.5L7.8 14.2L9.5 9.5L14.2 7.8Z"
+          fill={active ? 'white' : 'none'}
+          stroke={active ? 'white' : 'var(--et-placeholder)'}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     href: '/jobs/saved',
     label: 'Saved',
     icon: (active: boolean) => (
@@ -101,10 +125,12 @@ export function BottomNav() {
         {NAV_ITEMS.map(({ href, label, icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
+            // px-4 was fine at four tabs. At five, on a 390px screen it
+            // overflows; px-2.5 keeps every label on one line down to 360px.
             <Link
               key={href}
               href={href}
-              className="relative flex flex-col items-center gap-1 px-4 py-1.5 rounded-2xl"
+              className="relative flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-2xl"
             >
               {active && (
                 <motion.div

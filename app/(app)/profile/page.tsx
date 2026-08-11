@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
@@ -16,7 +16,6 @@ import type { UserProfile } from '@/lib/types/database'
 import { ProfileHeader, type ProfileStep } from '@/components/profile/ProfileHeader'
 import { ReferenceCard, type ReferenceState } from '@/components/profile/ReferenceCard'
 
-const ease = [0.22, 1, 0.36, 1] as const
 
 // ── AI Insights engine ────────────────────────────────────────────────
 function generateInsights(
@@ -75,27 +74,6 @@ function generateInsights(
 }
 
 // ── Completion score ──────────────────────────────────────────────────
-function getCompletion(profile: UserProfile, transports: Transportation[], interests: WeightedInterest[]): {
-  score: number
-  missing: string[]
-} {
-  const checks = [
-    { label: 'Name', done: !!profile.name },
-    { label: 'Age', done: !!profile.age },
-    { label: 'Location', done: !!profile.zip_code },
-    { label: 'Transportation', done: transports.length > 0 },
-    { label: 'School grade', done: !!profile.school_grade },
-    { label: 'Availability', done: Object.values(profile.availability as Record<string, boolean> ?? {}).some(Boolean) },
-    { label: 'Interests', done: interests.length > 0 },
-    { label: 'Skills', done: (profile.skills as string[]).length > 0 },
-    { label: 'Resume', done: !!profile.resume_url },
-  ]
-  const done = checks.filter((c) => c.done).length
-  return {
-    score: Math.round((done / checks.length) * 100),
-    missing: checks.filter((c) => !c.done).map((c) => c.label),
-  }
-}
 
 // ── Components ────────────────────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -150,35 +128,6 @@ function AvailabilityGrid({ availability }: { availability: Record<string, boole
   )
 }
 
-function CompletionRing({ score }: { score: number }) {
-  const r = 18
-  const circ = 2 * Math.PI * r
-  const offset = circ - (score / 100) * circ
-  return (
-    <div className="relative flex-shrink-0" style={{ width: 44, height: 44 }}>
-      <svg width="44" height="44" viewBox="0 0 44 44" style={{ transform: 'rotate(-90deg)' }}>
-        <defs>
-          <linearGradient id="pCompRing" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop stopColor="#2563EB" />
-            <stop offset="1" stopColor="#7C3AED" />
-          </linearGradient>
-        </defs>
-        <circle cx="22" cy="22" r={r} fill="none" stroke="var(--et-ground)" strokeWidth="4" />
-        <motion.circle
-          cx="22" cy="22" r={r}
-          fill="none" stroke="url(#pCompRing)" strokeWidth="4" strokeLinecap="round"
-          strokeDasharray={circ}
-          initial={{ strokeDashoffset: circ }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1, ease, delay: 0.3 }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--et-blue)' }}>{score}%</span>
-      </div>
-    </div>
-  )
-}
 
 // ── Main page ─────────────────────────────────────────────────────────
 export default function ProfilePage() {
@@ -261,12 +210,10 @@ export default function ProfilePage() {
   const interests: WeightedInterest[] = deserializeInterests(profile.interests)
   const skills = (profile.skills as string[]) ?? []
   const availability = (profile.availability as Record<string, boolean>) ?? {}
-  const { score: completion, missing } = getCompletion(profile, transports, interests)
   const insights = generateInsights(profile, transports, interests, savedCount, appliedCount)
   const gradeLabel = GRADE_LABELS[profile.school_grade as keyof typeof GRADE_LABELS] ?? profile.school_grade
   const availableDays = Object.entries(availability).filter(([, v]) => v).map(([k]) => k.charAt(0).toUpperCase() + k.slice(1))
   const primaryTransport = transports[0]
-  const primaryTransportOption = TRANSPORTATION_OPTIONS.find((o) => o.value === primaryTransport)
 
   // The facts that gate what a teen can even be shown. Stated once, at the
   // top, rather than buried across five sections further down the page.
@@ -325,71 +272,25 @@ export default function ProfilePage() {
 
       <div className="px-4 flex flex-col gap-4">
 
-        {/* ── Career Snapshot ── */}
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ ease }}>
-          <ProfileCard style={{ padding: '20px' }}>
-            <div className="flex items-start gap-4">
-              {/* Avatar */}
-              <div style={{
-                width: 56, height: 56, borderRadius: 'var(--radius-md)', flexShrink: 0,
-                background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: 'var(--shadow-match)',
-              }}>
-                <span style={{ fontSize: '22px', fontWeight: 800, color: '#fff' }}>{profile.name?.[0]?.toUpperCase()}</span>
-              </div>
+        {/* ── REMOVED: Career Snapshot card + completion nudge ──
+            This page was stating one fact four separate times: an 80% ring, a
+            "Profile 80%" stat, a "Missing: x, y, z" nudge, and the header
+            stepper. Four widgets, one number, none of them actionable.
 
-              <div className="flex-1 min-w-0">
-                <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--et-ink)', letterSpacing: '-0.01em' }}>{profile.name}</p>
-                <p style={{ fontSize: '13px', color: 'var(--et-muted)', marginTop: 1 }}>
-                  Age {profile.age} · {profile.state} {profile.zip_code}
-                </p>
-                {gradeLabel && (
-                  <p style={{ fontSize: '12px', color: 'var(--et-placeholder)', marginTop: 2 }}>{gradeLabel}</p>
-                )}
-              </div>
+            A percentage is a GRADE. It tells a teen they are failing at
+            something without telling them what to do, and 80% specifically is
+            the worst of both — high enough to feel finished, low enough to
+            nag. The stepper in ProfileHeader already answers the real
+            question ("step 4 of 9, next is Availability"), is tappable, and
+            takes them somewhere.
 
-              <CompletionRing score={completion} />
-            </div>
+            The avatar, name, age and saved/applied counts all moved into
+            ProfileHeader too, so the whole card was duplicate chrome.
 
-            {/* Stats row */}
-            <div style={{ display: 'flex', gap: 0, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--et-border)' }}>
-              {[
-                { label: 'Saved', value: savedCount },
-                { label: 'Applied', value: appliedCount },
-                { label: 'Profile', value: `${completion}%` },
-              ].map(({ label, value }, i) => (
-                <div key={label} style={{ flex: 1, textAlign: 'center', borderRight: i < 2 ? '1px solid var(--et-border)' : 'none' }}>
-                  <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--et-ink)', letterSpacing: '-0.02em' }}>{value}</p>
-                  <p style={{ fontSize: '11px', color: 'var(--et-placeholder)', marginTop: 1, fontWeight: 500 }}>{label}</p>
-                </div>
-              ))}
-            </div>
-          </ProfileCard>
-        </motion.div>
-
-        {/* ── Profile completion nudge ── */}
-        <AnimatePresence>
-          {missing.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="match-gradient-subtle rounded-2xl px-4 py-3.5 flex items-start gap-3"
-              style={{ border: '1px solid rgba(37,99,235,0.12)' }}
-            >
-              <span style={{ fontSize: '16px', flexShrink: 0 }}>✨</span>
-              <div>
-                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--et-blue)' }}>
-                  Complete your profile for better matches
-                </p>
-                <p style={{ fontSize: '12px', color: 'var(--et-subtle)', marginTop: 2 }}>
-                  Missing: {missing.slice(0, 3).join(', ')}{missing.length > 3 ? ` +${missing.length - 3} more` : ''}
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            getCompletion() and CompletionRing are gone with it. If a single
+            number is ever needed again — for admin or cohort reporting — the
+            stepper's done/total is the honest source, not a weighted score
+            nobody can audit. */}
 
         {/* ── Reference ──
             Sits high on the page on purpose. It is the only claim here that

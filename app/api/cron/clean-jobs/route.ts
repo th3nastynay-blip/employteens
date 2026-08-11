@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
   // every human-verified phone job within a day of it going live.
   const { data: jobsToCheck } = await supabase
     .from('jobs')
-    .select('id, apply_url, title, company, location, source')
+    .select('id, apply_url, title, company, location, source, kind')
     .eq('status', 'active')
     .eq('is_active', true)
     .eq('apply_method', 'url')
@@ -116,9 +116,22 @@ export async function GET(req: NextRequest) {
         title: j.title,
         location: j.location,
         company: j.company, // enables default-deny destination check
-        // Without this, every curated program-page job would be rejected as
-        // 'generic' on its first nightly recheck and silently deactivated.
-        programPage: j.source === 'local',
+        // WHAT COUNTS AS A CURATED PROGRAMME PAGE.
+        //
+        // This was `j.source === 'local'`. Opportunity rows carry
+        // source='opportunity', so all 31 curated competitions, programmes and
+        // volunteer entries were re-verified with the STRICT job-posting rules
+        // — which demand an ATS job-ID URL shape a programme page will never
+        // have. They all failed and were deactivated on the first run of this
+        // cron, leaving Explore with one live entry out of 31.
+        //
+        // Identical bug to the one in audit-jobs, in a second place. Keyed on
+        // `kind` too now: it is NOT NULL with a CHECK constraint, so unlike a
+        // free-text source string it cannot drift.
+        programPage:
+          j.source === 'local' ||
+          j.source === 'opportunity' ||
+          (typeof j.kind === 'string' && j.kind !== 'job'),
       })),
       4 // concurrency
     )
@@ -186,6 +199,12 @@ export async function GET(req: NextRequest) {
     )
     .eq('status', 'active')
     .eq('apply_method', 'url')
+    // Jobs only. A 14-day cutoff is right for a job req that dies in days and
+    // wrong for an annual competition — that is exactly what
+    // verify_interval_days exists to express (job 3, competition 90). Sweeping
+    // opportunities into the job cadence would deactivate them every fortnight
+    // no matter how healthy the link is.
+    .eq('kind', 'job')
     .or(`last_verified_at.is.null,last_verified_at.lt.${cutoff.toISOString()}`)
 
   results.deactivated_expired = expiredCount ?? 0
@@ -200,6 +219,12 @@ export async function GET(req: NextRequest) {
     .from('jobs')
     .select('id, title, company, state, location, verified_at')
     .eq('status', 'active')
+    // Jobs only. Two Knowledge Matters entries (FCCLA and BPA) share a company
+    // and a location string of 'Virtual', so a title|company|location key
+    // would read curated opportunities as duplicates of each other. Dedupe is
+    // for scraped inventory; the 31 opportunities were entered by hand and are
+    // deliberately distinct.
+    .eq('kind', 'job')
     .order('verified_at', { ascending: false })
 
   if (activeJobs) {

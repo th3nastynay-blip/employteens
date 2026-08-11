@@ -153,11 +153,17 @@ export function logoSources(brand: Brand, _size = 128): string[] {
     // a guessed extension list: saving from unavatar produces png, webp AND
     // ico depending on what the site publishes, and probing four extensions
     // per card meant three guaranteed 404s before the hit.
-    ...(local ? [`/logos/${brand.slug}.${local}`] : []),
+    // ?v= busts NEGATIVE cache. These paths 404'd for most of today, and a
+    // browser that cached "/logos/target.png = 404" keeps honouring it after
+    // the file lands. Bump LOGO_VERSION whenever files are added.
+    ...(local ? [`/logos/${brand.slug}.${local}?v=${LOGO_VERSION}`] : []),
     // Confirmed working from our own origin. See the note above.
     `https://unavatar.io/${brand.domain}?fallback=false`,
   ]
 }
+
+/** Bump when logo files change, to defeat cached 404s. */
+export const LOGO_VERSION = 2
 
 /**
  * Files present in /public/logos, slug → extension.

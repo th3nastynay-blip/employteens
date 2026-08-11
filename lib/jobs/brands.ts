@@ -147,14 +147,41 @@ export function brandFor(company: string | null | undefined): Brand | null {
  * the brand tile rather than rendering a blurry 16px square at 44px.
  */
 export function logoSources(brand: Brand, _size = 128): string[] {
+  const local = LOCAL_LOGOS[brand.slug]
   return [
-    // Local file wins if present — no network, cannot break.
-    `/logos/${brand.slug}.png`,
-    `/logos/${brand.slug}.svg`,
-    // The only remote source confirmed to work from our origin.
+    // A file we actually hold. LOCAL_LOGOS is an explicit manifest rather than
+    // a guessed extension list: saving from unavatar produces png, webp AND
+    // ico depending on what the site publishes, and probing four extensions
+    // per card meant three guaranteed 404s before the hit.
+    ...(local ? [`/logos/${brand.slug}.${local}`] : []),
+    // Confirmed working from our own origin. See the note above.
     `https://unavatar.io/${brand.domain}?fallback=false`,
   ]
 }
+
+/**
+ * Files present in /public/logos, slug → extension.
+ *
+ * Keep this in step when adding a file. `npm run logos:manifest` regenerates
+ * it from the directory listing.
+ */
+const LOCAL_LOGOS: Record<string, string> = {
+  chipotle: 'png',
+  cvs: 'webp',
+  dunkindonuts: 'png',
+  eataly: 'png',
+  gopuff: 'png',
+  hottopic: 'ico',
+  insomniacookies: 'png',
+  macys: 'webp',
+  mcdonalds: 'ico',
+  shoprite: 'png',
+  starbucks: 'png',
+  target: 'png',
+  wegmans: 'png',
+}
+
+
 
 /** Every filename the app will look for. Used by the generator script. */
 export function allLogoSlugs(): { slug: string; name: string; domain: string }[] {

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { recordApplyClick } from '@/lib/apply-tracking'
 import { visibleTags } from '@/lib/jobs/quality-score'
+import { OrgLogo } from '@/components/ui/OrgLogo'
 import type { JobMatch } from '@/lib/types/database'
 
 interface JobCardProps {
@@ -21,26 +22,35 @@ function getMatchLabel(score: number): string {
   return 'Possible Match'
 }
 
+/**
+ * The ring stays on JOBS and deliberately does not exist on opportunities.
+ * A job is genuinely scored against schedule, commute and age, so a percentage
+ * is real precision. An opportunity is not scored against anything, and a ring
+ * there would be decoration pretending to be a measurement.
+ *
+ * Shrunk from 72 to 52 so the employer's logo can take the leading position.
+ * The teen recognises "Chipotle" before they read "91%".
+ */
 function MatchRing({ score }: { score: number }) {
-  const r = 28
+  const r = 21
   const circ = 2 * Math.PI * r
   const offset = circ - (score / 100) * circ
 
   return (
-    <div className="relative flex-shrink-0" style={{ width: 72, height: 72 }}>
-      <svg width="72" height="72" viewBox="0 0 72 72" style={{ transform: 'rotate(-90deg)' }}>
+    <div className="relative flex-shrink-0" style={{ width: 52, height: 52 }}>
+      <svg width="52" height="52" viewBox="0 0 52 52" style={{ transform: 'rotate(-90deg)' }}>
         <defs>
           <linearGradient id={`mg${score}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop stopColor="#2563EB" />
             <stop offset="1" stopColor="#7C3AED" />
           </linearGradient>
         </defs>
-        <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(37,99,235,0.10)" strokeWidth="6" />
+        <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(37,99,235,0.10)" strokeWidth="5" />
         <motion.circle
-          cx="36" cy="36" r={r}
+          cx="26" cy="26" r={r}
           fill="none"
           stroke={`url(#mg${score})`}
-          strokeWidth="6"
+          strokeWidth="5"
           strokeLinecap="round"
           strokeDasharray={circ}
           initial={{ strokeDashoffset: circ }}
@@ -49,7 +59,10 @@ function MatchRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="match-gradient-text" style={{ fontSize: '17px', fontWeight: 800, lineHeight: 1 }}>
+        <span
+          className="match-gradient-text"
+          style={{ fontFamily: 'var(--font-display)', fontSize: '13.5px', fontWeight: 800, lineHeight: 1 }}
+        >
           {score}%
         </span>
       </div>
@@ -81,9 +94,13 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
 
   const isHumanContact = job.apply_method === 'call' || job.apply_method === 'text' || job.apply_method === 'email'
   const CONTACT_COPY: Record<'call' | 'text' | 'email', { badge: string; button: string }> = {
-    call:  { badge: '📞 Call to apply',  button: '📞 Call to Apply' },
-    text:  { badge: '💬 Text to apply',  button: '💬 Text to Apply' },
-    email: { badge: '✉️ Email to apply', button: '✉️ Email to Apply' },
+    // No emoji. They render differently on every Android build and were the
+    // loudest thing on a card whose job is to be readable. The button keeps a
+    // distinct verb per method, which is the part that actually matters — a
+    // teen needs to know they are about to open the phone dialler, not a form.
+    call:  { badge: 'Call to apply',  button: 'Call to apply' },
+    text:  { badge: 'Text to apply',  button: 'Text to apply' },
+    email: { badge: 'Email to apply', button: 'Email to apply' },
   }
 
   async function handleApply() {
@@ -164,49 +181,45 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: index * 0.06 }}
       className="card-elevated overflow-hidden flex flex-col"
     >
-      {/* ── Match header ── */}
+      {/* ── Header ──
+          LOGO LEADS, ring follows. The old layout gave the whole leading slot
+          to a 72px match ring, so every card in the feed opened with a number
+          and the employer was a grey line of text underneath. A teen scanning
+          a list recognises "Chipotle" long before they read "91%", and the
+          Explore cards already lead with the organisation — this is what made
+          the two halves of the app look like different products.
+
+          Badges are .pill now, not .badge, and the emoji are gone. Emoji
+          render differently on every Android build and were the loudest thing
+          on a card whose actual job is to be readable. */}
       <div
-        className="px-5 pt-5 pb-4 flex items-start gap-4"
+        className="px-5 pt-5 pb-4 flex items-start gap-3.5"
         style={{ borderBottom: '1px solid var(--et-border)' }}
       >
-        <MatchRing score={job.match_score} />
+        <OrgLogo src={job.logo_url as string | null} name={job.company} size={48} radius={13} />
 
-        <div className="flex-1 min-w-0 pt-0.5">
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className="match-gradient-text" style={{ fontSize: '13px', fontWeight: 800 }}>
-              {matchLabel}
-            </span>
-            {isProgram && (
-              <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
-                🏛️ City program
-              </span>
-            )}
+        <div className="flex-1 min-w-0">
+          <h3 className="display" style={{ fontSize: '17px', lineHeight: 1.22 }}>
+            {job.title}
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--et-muted)', marginTop: 2, fontWeight: 500 }}>
+            {job.company}
+          </p>
+
+          <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 8 }}>
+            <span className="pill pill-blue">{matchLabel}</span>
+            {isProgram && <span className="pill pill-blue">City program</span>}
             {isHumanContact && (
-              <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
+              <span className="pill pill-blue">
                 {CONTACT_COPY[job.apply_method as 'call' | 'text' | 'email'].badge}
               </span>
             )}
-            {isNew && !isProgram && (
-              <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 7px' }}>
-                New
-              </span>
-            )}
-            {hiresfast && (
-              <span className="badge badge-amber" style={{ fontSize: '10px', padding: '2px 7px' }}>
-                ⚡ Hires Fast
-              </span>
-            )}
+            {isNew && !isProgram && <span className="pill">New</span>}
+            {hiresfast && <span className="pill pill-amber">Hires fast</span>}
           </div>
-          <h3 style={{
-            fontSize: '18px', fontWeight: 700, color: 'var(--et-ink)',
-            letterSpacing: '-0.02em', lineHeight: 1.2,
-          }}>
-            {job.title}
-          </h3>
-          <p style={{ fontSize: '13px', color: 'var(--et-muted)', marginTop: '2px', fontWeight: 500 }}>
-            {job.company}
-          </p>
         </div>
+
+        <MatchRing score={job.match_score} />
       </div>
 
       {/* ── Why this matches you ── */}
@@ -275,40 +288,43 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
       {/* ── Logistics + actions ── */}
       <div className="px-5 pt-3.5 pb-4 flex flex-col gap-3.5">
         <div className="flex flex-wrap gap-2">
-          {verifiedLabel && (
-            <span className="badge badge-green" title="We re-check every listing's application link automatically">
-              ✓ {verifiedLabel}
-            </span>
-          )}
-          {job.distance_miles !== undefined && (
-            <span className="badge badge-subtle">
-              📍 {job.distance_miles < 1 ? 'Under 1 mi' : `${job.distance_miles.toFixed(1)} mi`}
-            </span>
-          )}
-          <span className="badge badge-green">Ages {job.min_age}+</span>
-          {structuredTags.map((t) => (
-            <span key={t} className="badge badge-subtle">{t}</span>
-          ))}
-          {teenFavorite && (
-            <span className="badge badge-subtle">💜 Teen favorite</span>
-          )}
-          {job.experience_required === 'none' && (
-            <span className="badge badge-blue">No experience needed</span>
-          )}
+          {/* Order matters. Pay and age come first because they are the two
+              facts that decide whether a teen can act on this at all; the
+              texture tags come last. Previously "verified" led, which is our
+              concern, not theirs. */}
           {hasPay ? (
-            <span className="badge badge-subtle">
+            <span className="pill pill-green">
               ${plausibleSalary(job.salary_min) ? job.salary_min : job.salary_max}/hr
             </span>
           ) : (
-            <span className="badge badge-subtle">Competitive pay</span>
+            <span className="pill">Pay not listed</span>
           )}
+          <span className="pill pill-green">Ages {job.min_age}+</span>
+          {job.distance_miles !== undefined && (
+            <span className="pill">
+              {job.distance_miles < 1 ? 'Under 1 mi' : `${job.distance_miles.toFixed(1)} mi`}
+            </span>
+          )}
+          {job.experience_required === 'none' && (
+            <span className="pill pill-blue">No experience needed</span>
+          )}
+          {verifiedLabel && (
+            <span className="pill pill-muted" title="We re-check every listing's application link automatically">
+              {verifiedLabel}
+            </span>
+          )}
+          {structuredTags.map((t) => (
+            <span key={t} className="pill">{t}</span>
+          ))}
+          {teenFavorite && <span className="pill">Teen favourite</span>}
         </div>
 
         <p style={{ fontSize: '12px', color: 'var(--et-placeholder)' }}>{job.location}</p>
 
         {isHumanContact && job.contact_note && (
           <p style={{ fontSize: '12px', color: 'var(--et-subtle)', lineHeight: 1.4, background: 'var(--et-blue-light)', padding: '8px 10px', borderRadius: 'var(--radius-sm)' }}>
-            {job.apply_method === 'email' ? '✉️' : '📞'} {job.apply_method === 'email' ? job.contact_email : job.contact_phone} — {job.contact_note}
+            <strong>{job.apply_method === 'email' ? job.contact_email : job.contact_phone}</strong>
+            {job.contact_note ? ` · ${job.contact_note}` : ''}
           </p>
         )}
 
@@ -318,7 +334,7 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             onClick={handleSave}
             disabled={saving}
             style={{
-              height: 46, width: 52, borderRadius: 'var(--radius-md)', flexShrink: 0,
+              height: 48, width: 52, borderRadius: 14, flexShrink: 0,
               border: isSaved ? '1.5px solid rgba(37,99,235,0.3)' : '1.5px solid var(--et-border-mid)',
               background: isSaved ? 'var(--et-blue-light)' : 'var(--et-surface)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -338,12 +354,20 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={handleApply}
-            className="btn-primary flex-1"
-            style={{ height: 46, borderRadius: 'var(--radius-md)', fontSize: '14px' }}
+            className="flex-1"
+            style={{
+              height: 48, borderRadius: 14, border: 'none',
+              // Same gradient as the Explore sheet's Apply. One primary action,
+              // one appearance, everywhere in the app.
+              background: 'linear-gradient(135deg, var(--et-match-from), var(--et-match-to))',
+              color: '#fff', fontFamily: 'var(--font-display)', fontWeight: 700,
+              fontSize: '15px', cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(37,99,235,0.26)',
+            }}
           >
             {isHumanContact
               ? CONTACT_COPY[job.apply_method as 'call' | 'text' | 'email'].button
-              : isProgram ? 'Learn & apply →' : 'Apply Now →'}
+              : isProgram ? 'Learn & apply' : 'Apply now'}
           </motion.button>
         </div>
       </div>

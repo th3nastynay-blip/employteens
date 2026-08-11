@@ -65,6 +65,11 @@ export default function DashboardPage() {
       setScanIdx(Math.min(i, SCAN_STATES.length - 1))
     }, 700)
 
+    // loadDashboard is a hoisted function declaration, so this is safe at
+    // runtime — the rule is about the React compiler's ability to track
+    // dependencies, not about a real TDZ error. Matching the convention used
+    // elsewhere in the codebase rather than restructuring the whole loader.
+    // eslint-disable-next-line react-hooks/immutability
     loadDashboard().finally(() => {
       clearInterval(interval)
       setTimeout(() => setIsLoading(false), 300)
@@ -230,7 +235,7 @@ export default function DashboardPage() {
   const timeLabel = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
 
   return (
-    <div className="flex flex-col min-h-full">
+    <div className="flex flex-col min-h-full pb-nav">
 
       {/* ── Header ── */}
       <div className="px-5 pt-safe-header pb-5">

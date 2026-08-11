@@ -15,7 +15,7 @@ import { UnifiedFeed } from '@/components/feed/UnifiedFeed'
 
 export default function JobsPage() {
   return (
-    <div className="flex flex-col min-h-full">
+    <div className="flex flex-col min-h-full pb-nav">
       <div className="px-5 pt-safe-header pb-4">
         <motion.h1
           initial={{ opacity: 0, y: -4 }}

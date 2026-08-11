@@ -172,11 +172,10 @@ export default function JobsTrackerPage() {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col pb-nav">
       <div className="px-5 pt-safe-header pb-4">
-        <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--et-ink)' }}>
-          My Jobs
-        </h1>
+        <p className="numbered-eyebrow">TRACKER</p>
+        <h1 className="display display-xl" style={{ marginTop: 4 }}>My jobs</h1>
         <p style={{ fontSize: '14px', color: 'var(--et-muted)', marginTop: 4 }}>
           {loading ? 'Loading…' : 'Track everything from saved to hired'}
         </p>

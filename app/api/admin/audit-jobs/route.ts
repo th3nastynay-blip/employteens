@@ -118,13 +118,13 @@ export async function POST(req: NextRequest) {
   if (req.nextUrl.searchParams.get('mode') === 'reconsider') {
     const { data: flaggedRows } = await supabase
       .from('jobs')
-      .select('id, title, company, location, source, tags')
+      .select('id, title, company, location, source, kind, tags')
       .eq('status', 'flagged')
       .limit(1000)
 
     let restored = 0
     for (const j of flaggedRows ?? []) {
-      const isProgram = j.source === 'local'
+      const isProgram = j.source === 'local' || j.source === 'opportunity' || (typeof j.kind === 'string' && j.kind !== 'job')
       if (isProgram || (isInMarket(j.location) && isTeenAppropriateTitle(j.title))) {
         restored++
         await supabase.from('jobs').update({
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
   // arrays is awkward — so fetch a window and filter.
   const { data: candidates } = await supabase
     .from('jobs')
-    .select('id, title, company, location, apply_url, source, job_type, tags, scam_risk_score, salary_min, description, posted_at, min_age')
+    .select('id, title, company, location, apply_url, source, kind, job_type, tags, scam_risk_score, salary_min, description, posted_at, min_age')
     .eq('status', 'active')
     .eq('is_active', true)
     .order('created_at', { ascending: true })
@@ -194,7 +194,23 @@ export async function POST(req: NextRequest) {
       if (!job) break
       counters.audited++
 
-      const isProgram = job.source === 'local'
+      // WHAT COUNTS AS A CURATED ENTRY — read this before changing it.
+      //
+      // This was `job.source === 'local'`. Opportunity rows carry
+      // source='opportunity' (see lib/jobs/opportunity-ingest.ts), so every
+      // curated competition, programme and volunteer entry fell through to the
+      // ORDINARY JOB pipeline. The geo gate then asked isInMarket('Virtual'),
+      // got false, and flagged all of them. The Extracurriculars page went to
+      // "0 open now" while the calendar still showed 22, because the calendar
+      // reads the seed and the cards read the database.
+      //
+      // Keyed on `kind` now as well as source. kind is a NOT NULL column with
+      // a CHECK constraint, so it cannot drift the way a free-text source
+      // string did.
+      const isProgram =
+        job.source === 'local' ||
+        job.source === 'opportunity' ||
+        (typeof job.kind === 'string' && job.kind !== 'job')
 
       // Out-of-market: a California job is useless to a Hudson County teen.
       // (Legacy rows got in via a substring bug — 'ny' matched "Sunnyvale".)

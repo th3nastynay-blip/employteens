@@ -39,6 +39,26 @@
 import { useState } from 'react'
 import { brandFor, logoSources } from '@/lib/jobs/brands'
 
+/**
+ * A stable colour for an organisation we have no brand entry for.
+ *
+ * The alternative was one grey tile for every unbranded org, and on the Explore
+ * page — where most entries are nonprofits and colleges that publish no usable
+ * icon — that produced a column of identical grey squares that read as "this
+ * page is broken" rather than "this org has no logo".
+ *
+ * Hashed from the name, so it is deterministic: the same org is the same colour
+ * on every device, every render, forever, with nothing fetched. Saturation and
+ * lightness are fixed and deliberately muted so these sit BEHIND real logos in
+ * the visual hierarchy instead of competing with them. Hue is quantised to 24
+ * steps because neighbouring hues a few degrees apart just look like a mistake.
+ */
+function hueTint(name: string): string {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return `hsl(${(h % 24) * 15}, 42%, 38%)`
+}
+
 /** White text on dark brands, dark text on pale ones (Glossier pink). */
 function readableOn(hex: string): string {
   const h = hex.replace('#', '')
@@ -113,10 +133,12 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
   const showImage = Boolean(resolved)
   const initials = initialsOf(name)
 
-  // When every source fails we do NOT fall back to grey. Target still reads
-  // red, Starbucks still reads green, so the feed stays recognisable and
-  // consistent even on a total network miss.
-  const tint = !showImage && brand ? brand.color : null
+  // When every source fails we do NOT fall back to grey. A known brand keeps
+  // its own colour (Target red, Starbucks green) so the feed stays recognisable
+  // on a total network miss; anything else gets a stable colour hashed from its
+  // name, so a page of logo-less nonprofits looks varied and intentional rather
+  // than like a wall of failed image loads.
+  const tint = showImage ? null : brand ? brand.color : hueTint(name)
 
   return (
     <div

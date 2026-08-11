@@ -105,7 +105,22 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin
+  // THE ORIGIN THE REQUEST ACTUALLY CAME IN ON, not an env var.
+  //
+  // This read NEXT_PUBLIC_APP_URL first, which is set to http://localhost:3000.
+  // So production happily minted links like
+  //   http://localhost:3000/vouch/<token>
+  // and the teen sent their supervisor a URL that resolves to the supervisor's
+  // own machine. The link was never broken; it was pointing somewhere else.
+  //
+  // The request origin is correct on every deployment — preview, production,
+  // custom domain — with nothing to configure and nothing to keep in sync.
+  // The env var is now only a fallback, and is ignored when it is localhost.
+  const envBase = process.env.NEXT_PUBLIC_APP_URL
+  const base =
+    envBase && !/localhost|127\.0\.0\.1/.test(envBase)
+      ? envBase.replace(/\/$/, '')
+      : req.nextUrl.origin
   return NextResponse.json({ ok: true, url: `${base}/vouch/${token}` })
 }
 

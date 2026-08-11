@@ -70,7 +70,13 @@ export function ReferenceCard({ reference, onSaved }: Props) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error([data.error, data.hint].filter(Boolean).join(' — ') || 'Could not save')
-      setLink(data.url)
+      // Build the URL from the page we are actually on, not from data.url.
+      // The server used to derive it from NEXT_PUBLIC_APP_URL, which is
+      // localhost:3000, so the freshly-minted link sent people to their own
+      // machine. The server is fixed too, but the browser already knows the
+      // right origin for certain and cannot be misconfigured.
+      const token = String(data.url ?? '').split('/vouch/')[1] ?? ''
+      setLink(token ? `${window.location.origin}/vouch/${token}` : data.url)
       setEditing(false)
       onSaved()
     } catch (e) {

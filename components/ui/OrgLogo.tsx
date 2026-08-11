@@ -3,37 +3,45 @@
 /**
  * EMPLOYTEENS — organisation tile
  *
- * WHY THERE IS NO LOGO-GUESSING ANY MORE
- *
- * Three attempts at third-party logos, three different failures:
+ * THREE ATTEMPTS AT THIRD-PARTY LOGOS, AND WHAT FINALLY WORKED
  *
  *   1. Favicon from the APPLY url → Google Forms' globe on BGIC, Workday's on
  *      Sloan Kettering, because the apply link points at a form host.
- *   2. Favicon from the ORG's domain → still a grey globe for anything without
- *      one, repeated down the whole list.
- *   3. Favicon from a GUESSED domain → the worst of the three. Google's icon
- *      service does not 404 when it has nothing; it GENERATES a coloured
- *      letter tile. Those come back at full size, so the "is it the 16px
- *      globe" check waves them straight through. The feed rendered a green
- *      "L" on Insomnia Cookies — a logo Google invented — while Target, whose
- *      domain is obviously right, fell back to a monogram.
+ *   2. Favicon from a GUESSED domain → worse. Google's icon service does not
+ *      404 when it has nothing; it GENERATES a coloured letter tile, at full
+ *      size, so the "is it the 16px globe" check waved them through. The feed
+ *      showed a green "L" on Insomnia Cookies — a logo Google invented — while
+ *      Target, whose domain is obviously right, got no icon at all.
+ *   3. No logos at all → consistent, and dull.
  *
- * That is not a tuning problem. A service that fabricates a plausible-looking
- * logo cannot be told apart from one that found a real one, so every card
- * becomes a coin flip and the list can never look consistent.
+ * The lesson from 2 is that a service which fabricates a plausible logo cannot
+ * be distinguished from one that found a real one, so DETECTING the miss is
+ * the wrong problem to solve. Stop needing to detect it.
  *
- * So: we render a real logo ONLY when someone deliberately supplied one
- * (`src`), which today means the 31 curated opportunities where the org's own
- * domain was checked by hand. Everything else gets the same designed tile.
- * Uniform by construction rather than by luck, no third-party request per
- * card, nothing invented.
+ * Now: verified domains only (lib/jobs/brands.ts, hand-checked, never
+ * inferred), and every brand also carries its primary colour. Favicon loads →
+ * real mark. Favicon fails, 404s, or returns something invented → the
+ * employer's initial on the employer's own colour. Target reads red either
+ * way, Starbucks green either way. Recognisable and consistent whichever
+ * branch runs, which is what makes it safe to depend on a flaky service.
  *
- * If real employer logos are wanted later, the honest route is local assets
- * for the ~20 chains that dominate this market — checked in, checked once,
- * never guessed.
+ * A company absent from the table gets the neutral tile. Adding one is a
+ * single line, and it stays manual on purpose: the cost of guessing wrong is a
+ * stranger's brand on a card we are asking a teen to trust.
  */
 
 import { useState } from 'react'
+import { brandFor, faviconFor } from '@/lib/jobs/brands'
+
+/** White text on dark brands, dark text on pale ones (Glossier pink). */
+function readableOn(hex: string): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  // Rec. 709 luma. Above ~0.62 the tile is light enough to need dark text.
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? '#1A1A1A' : '#FFFFFF'
+}
 
 /**
  * Initials. Two letters max, stop-words dropped so "The Great Sunflower
@@ -54,8 +62,8 @@ function initialsOf(name: string): string {
 
 interface Props {
   /**
-   * A logo we actually hold. Null for every job row — see the header. Do NOT
-   * add guessing here; that is the bug this file exists to close.
+   * An explicitly supplied logo (curated opportunities). When absent we fall
+   * back to the brand table, never to a guess derived from the name.
    */
   src?: string | null
   name: string
@@ -65,8 +73,19 @@ interface Props {
 
 export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
   const [failed, setFailed] = useState(false)
-  const showImage = Boolean(src) && !failed
+
+  // Verified domains only, from lib/jobs/brands.ts. There is no name-guessing
+  // path any more — that is what produced a fabricated logo last time.
+  const brand = brandFor(name)
+  const resolved = src ?? (brand ? faviconFor(brand.domain) : null)
+  const showImage = Boolean(resolved) && !failed
   const initials = initialsOf(name)
+
+  // The whole point of the brand colour: when the favicon fails — and it will,
+  // unpredictably — we do not fall back to grey. Target still reads as red,
+  // Starbucks still reads as green. Recognisable either way, consistent either
+  // way, and it no longer matters whether we can detect the miss.
+  const tint = !showImage && brand ? brand.color : null
 
   return (
     <div
@@ -78,8 +97,8 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
         overflow: 'hidden',
         position: 'relative',
         // Constant tile. The contents may vary; the container never does.
-        background: 'var(--et-surface-2)',
-        border: '1px solid var(--et-border)',
+        background: tint ?? 'var(--et-surface-2)',
+        border: tint ? 'none' : '1px solid var(--et-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -89,7 +108,7 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src as string}
+          src={resolved as string}
           alt=""
           width={size}
           height={size}
@@ -114,7 +133,7 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
             fontFamily: 'var(--font-display)',
             fontSize: Math.round(size * 0.34),
             fontWeight: 800,
-            color: 'var(--et-muted)',
+            color: tint ? readableOn(tint) : 'var(--et-muted)',
             letterSpacing: '0.01em',
             lineHeight: 1,
           }}

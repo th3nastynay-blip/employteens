@@ -2,8 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { recordApplyClick } from '@/lib/apply-tracking'
+import { openApplication } from '@/lib/jobs/apply'
 import { visibleTags } from '@/lib/jobs/quality-score'
 import { OrgLogo } from '@/components/ui/OrgLogo'
 import type { JobMatch } from '@/lib/types/database'
@@ -20,6 +19,8 @@ interface JobCardProps {
    * than showing a number we cannot justify.
    */
   fit?: FitFactor[]
+  /** Opens the detail sheet. Absent = card is not tappable (tracker). */
+  onOpen?: (job: JobMatch) => void
 }
 
 
@@ -97,7 +98,7 @@ function parseReasons(explanation: string): string[] {
   return parts.slice(0, 4)
 }
 
-export function JobCard({ job, onSave, isSaved, index = 0, fit }: JobCardProps) {
+export function JobCard({ job, onSave, isSaved, index = 0, fit, onOpen }: JobCardProps) {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
@@ -119,35 +120,7 @@ export function JobCard({ job, onSave, isSaved, index = 0, fit }: JobCardProps) 
   }
 
   async function handleApply() {
-    // Human-contact jobs: apply_url is a synthetic tel:/sms:/mailto: URI (set
-    // at ingest time, see smb-phone-ingest.ts) — window.open on it hands off
-    // to the OS dialer/Messages/Mail app the same way a plain <a href> would.
-    // Nothing else needs to branch here.
-    window.open(job.apply_url, '_blank', 'noopener,noreferrer')
-
-    // Do NOT mark as applied — clicking Apply only means they opened the
-    // page. The pending click is recorded locally; when the user returns,
-    // ApplyConfirmSheet asks "Did you apply?" and only a confirmed Yes
-    // writes status='applied'. Analytics still capture the click itself.
-    recordApplyClick({
-      id: job.id,
-      title: job.title,
-      company: job.company,
-      contactMethod: isHumanContact ? (job.apply_method as 'call' | 'text' | 'email') : undefined,
-    })
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      await supabase.from('analytics_events').insert({
-        user_id: user.id,
-        event_type: 'apply_click',
-        job_id: job.id,
-        metadata: {},
-      })
-    } catch {
-      // Non-critical — don't block the apply action
-    }
+    await openApplication(job)
   }
   const hiresfast = job.hiring_speed_score >= 80
   const reasons = parseReasons(job.match_explanation)
@@ -216,9 +189,21 @@ export function JobCard({ job, onSave, isSaved, index = 0, fit }: JobCardProps) 
           Badges are .pill now, not .badge, and the emoji are gone. Emoji
           render differently on every Android build and were the loudest thing
           on a card whose actual job is to be readable. */}
+      {/* Tapping the header opens the full sheet, matching the Explore cards.
+          Scoped to the header rather than the whole card so Save and Apply
+          below still behave as buttons rather than as parts of a link. */}
       <div
-        className="px-5 pt-5 pb-4 flex items-start gap-3.5"
-        style={{ borderBottom: '1px solid var(--et-border)' }}
+        className={onOpen ? 'press' : ''}
+        onClick={onOpen ? () => onOpen(job) : undefined}
+        role={onOpen ? 'button' : undefined}
+        tabIndex={onOpen ? 0 : undefined}
+        onKeyDown={onOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(job) } } : undefined}
+        style={{
+          borderBottom: '1px solid var(--et-border)',
+          cursor: onOpen ? 'pointer' : 'default',
+          padding: '20px 20px 16px',
+          display: 'flex', alignItems: 'flex-start', gap: 14,
+        }}
       >
         <OrgLogo src={job.logo_url as string | null} name={job.company} size={48} radius={13} />
 
@@ -247,7 +232,14 @@ export function JobCard({ job, onSave, isSaved, index = 0, fit }: JobCardProps) 
           </div>
         </div>
 
-        {fit && fit.length > 0 && <FitRing factors={fit} />}
+        <div className="flex items-center gap-1.5" style={{ flexShrink: 0 }}>
+          {fit && fit.length > 0 && <FitRing factors={fit} />}
+          {onOpen && (
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 3.5L10.5 8L6 12.5" stroke="var(--et-placeholder)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
       </div>
 
       {/* ── Why this matches you ── */}

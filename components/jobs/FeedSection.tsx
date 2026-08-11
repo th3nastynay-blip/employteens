@@ -1,6 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { JobCard } from './JobCard'
+import { JobSheet } from './JobSheet'
+import { openApplication } from '@/lib/jobs/apply'
 import { fitFactors } from '@/lib/ai/match-engine'
 import type { JobMatch, UserProfile, JobRow } from '@/lib/types/database'
 
@@ -18,6 +21,8 @@ interface FeedSectionProps {
 }
 
 export function FeedSection({ jobs, savedJobs, onSave, emptyState, profile }: FeedSectionProps) {
+  const [open, setOpen] = useState<JobMatch | null>(null)
+  const openFit = open && profile ? fitFactors(profile, open as unknown as JobRow) : undefined
   if (jobs.length === 0) {
     return (
       <div
@@ -51,8 +56,18 @@ export function FeedSection({ jobs, savedJobs, onSave, emptyState, profile }: Fe
           isSaved={savedJobs.includes(job.id)}
           index={i}
           fit={profile ? fitFactors(profile, job as unknown as JobRow) : undefined}
+          onOpen={setOpen}
         />
       ))}
+
+      <JobSheet
+        job={open}
+        fit={openFit}
+        isSaved={open ? savedJobs.includes(open.id) : false}
+        onSave={onSave}
+        onApply={(j) => { void openApplication(j) }}
+        onClose={() => setOpen(null)}
+      />
     </div>
   )
 }

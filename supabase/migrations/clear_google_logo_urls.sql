@@ -17,15 +17,17 @@
 -- Google's favicon service is banned from this codebase: it answers 200 with
 -- an invented image rather than 404ing, so a miss cannot be told from a hit.
 
+-- SCOPED TO kind='job'. The first version of this file was not, and it wiped
+-- the 31 curated opportunities' logos as collateral — those rows were written
+-- with the same service but they have nothing else to fall back to, because EC
+-- organisations are not in the employer brand table and never should be.
+-- restore_opportunity_logos.sql repairs them from the seed's homepage domains.
 UPDATE public.jobs
    SET logo_url = NULL
- WHERE logo_url LIKE '%google.com/s2/favicons%';
-
--- Opportunities are cleared too. Those 31 rows were written by
--- opportunity-ingest with the same service; the brand table and local files
--- are strictly better, and anything still missing falls to unavatar.
+ WHERE kind = 'job'
+   AND logo_url LIKE '%google.com/s2/favicons%';
 
 -- Expect 0.
 SELECT count(*) AS remaining_google_urls
   FROM public.jobs
- WHERE logo_url LIKE '%google.com/s2/favicons%';
+ WHERE kind = 'job' AND logo_url LIKE '%google.com/s2/favicons%';

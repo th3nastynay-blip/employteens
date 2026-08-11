@@ -2,6 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ChatHistory } from '@/components/career/ChatHistory'
+import {
+  createConversation,
+  appendMessage,
+  loadMessages,
+} from '@/lib/ai/coach-store'
 
 interface Message {
   id: string
@@ -286,6 +292,14 @@ export default function CareerPage() {
   // a limit warning to someone who has not sent anything.
   const [remaining, setRemaining] = useState<number | null>(null)
   const [focused, setFocused] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // Bumped after every save so the drawer refetches its list.
+  const [historyKey, setHistoryKey] = useState(0)
+  // The conversation being written to. Held in a ref as well as state because
+  // sendMessage closes over it and a fresh chat creates the row mid-send —
+  // reading state there would see the value from before the create.
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const convoRef = useRef<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -330,10 +344,16 @@ export default function CareerPage() {
     } catch { /* storage full/unavailable — chat still works, just won't persist */ }
   }, [messages])
 
+  // Start a new conversation. Nothing is deleted: the previous chat is already
+  // saved and reachable from the drawer, which is the whole point of this
+  // feature. Previously "New chat" destroyed the only copy.
   function clearChat() {
     abortRef.current?.abort()
     setMessages([])
     setTrack(null)
+    setConversationId(null)
+    convoRef.current = null
+    try { sessionStorage.removeItem(CHAT_KEY) } catch { /* noop */ }
     try { sessionStorage.removeItem(CHAT_KEY) } catch { /* noop */ }
   }
 
@@ -358,6 +378,20 @@ export default function CareerPage() {
     setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)))
   }
 
+  // Load a saved chat into the view. Aborts anything in flight first, so a
+  // stream from the previous conversation cannot append tokens into this one.
+  const openConversation = useCallback(async (id: string) => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setIsStreaming(false)
+    setShowTyping(false)
+    setTrack(null)
+    convoRef.current = id
+    setConversationId(id)
+    const rows = await loadMessages(id)
+    setMessages(rows.map((r) => ({ id: r.id, role: r.role, content: r.content })))
+  }, [])
+
   function scrollToBottom(smooth = true) {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
   }
@@ -377,6 +411,24 @@ export default function CareerPage() {
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content }
     const updatedMessages = [...messages, userMsg]
     setMessages(updatedMessages)
+
+    // Persist in the background. Deliberately not awaited: the answer must not
+    // wait on a write, and if the tables are missing every one of these calls
+    // no-ops and the chat behaves exactly as it did before saving existed.
+    void (async () => {
+      let cid = convoRef.current
+      if (!cid) {
+        cid = await createConversation(content)
+        if (cid) {
+          convoRef.current = cid
+          setConversationId(cid)
+        }
+      }
+      if (cid) {
+        await appendMessage(cid, 'user', content)
+        setHistoryKey((k) => k + 1)
+      }
+    })()
 
     // Brief delay before AI starts "typing"
     await new Promise((r) => setTimeout(r, 400))
@@ -436,6 +488,15 @@ export default function CareerPage() {
             // skip malformed chunks
           }
         }
+      }
+
+      // Save the finished answer. After the loop, so a half-streamed reply is
+      // never written — reopening a chat should show what the teen actually
+      // read, not a fragment.
+      if (convoRef.current && accumulated.trim()) {
+        void appendMessage(convoRef.current, 'assistant', accumulated).then(() =>
+          setHistoryKey((k) => k + 1),
+        )
       }
 
       // Mark streaming done. If NOTHING parseable arrived (non-SSE error
@@ -511,6 +572,21 @@ export default function CareerPage() {
         style={{ borderBottom: '1px solid var(--et-border)' }}
       >
         <div className="flex items-center gap-3">
+          {/* History lives on the left, where every chat product puts it. */}
+          <button
+            onClick={() => setHistoryOpen(true)}
+            aria-label="Saved chats"
+            className="press"
+            style={{
+              width: 34, height: 34, borderRadius: 11, flexShrink: 0, cursor: 'pointer',
+              background: 'var(--et-surface)', border: '1px solid var(--et-border-mid)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2.5 4h11M2.5 8h11M2.5 12h7" stroke="var(--et-subtle)" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
           <LogoMark size={32} />
           <div className="flex-1" style={{ minWidth: 0 }}>
             <h1 className="display" style={{ fontSize: '17px', lineHeight: 1.15 }}>AI Coach</h1>
@@ -693,6 +769,15 @@ export default function CareerPage() {
 
         <div ref={bottomRef} style={{ height: 1 }} />
       </div>
+
+      <ChatHistory
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        activeId={conversationId}
+        onSelect={(id) => { void openConversation(id) }}
+        onNew={clearChat}
+        refreshKey={historyKey}
+      />
 
       {/* ── Composer ──
           A textarea, not an <input>. The coach is regularly asked to review a

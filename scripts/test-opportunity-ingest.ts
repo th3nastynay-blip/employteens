@@ -21,6 +21,14 @@ check('subdomain preserved', (logoForUrl('https://cs50.harvard.edu/x/') ?? '').i
 check('garbage url returns null rather than a broken image', logoForUrl('not a url') === null)
 check('every seed entry resolves a logo', OPPORTUNITY_SOURCES.every((o) => logoForUrl(o.apply_url) !== null))
 
+if (OPPORTUNITY_SOURCES.length === 0) {
+  // Seed cleared 2026-08-10 pending the curated list. The pure helpers above
+  // still run; everything below needs real entries to assert against.
+  console.log('\nSeed is empty — mapping checks will run once entries are added.')
+  console.log(`\n${failures === 0 ? 'All checks passed.' : `${failures} FAILING`}`)
+  process.exit(failures === 0 ? 0 : 1)
+}
+
 console.log('\n— seasonality —')
 const seasonal = OPPORTUNITY_SOURCES.find((o) => o.activeMonths && o.activeMonths.length > 0)!
 const yearRound = OPPORTUNITY_SOURCES.find((o) => !o.activeMonths || o.activeMonths.length === 0)!

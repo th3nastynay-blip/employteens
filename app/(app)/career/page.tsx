@@ -10,13 +10,64 @@ interface Message {
   streaming?: boolean
 }
 
-const SUGGESTED_PROMPTS = [
-  'Help me write a resume with no experience',
-  'How do I prepare for a Chipotle interview?',
-  'I only have Tuesdays and weekends free — what jobs fit?',
-  'Starbucks rejected me. What should I do?',
-  'Do I need a work permit at 16 in New York?',
-]
+/**
+ * THREE TRACKS, NOT FIVE PROMPTS.
+ *
+ * The empty state used to be a flat list of five suggestions, which quietly
+ * assumed every teen opening this page wanted the same thing. They do not, and
+ * the gap is enormous: a 15-year-old who needs bus fare by Friday and a
+ * 17-year-old asking how a job reads on a Rutgers application are not variations
+ * of one user, and an answer tuned for either one is close to useless for the
+ * other.
+ *
+ * The coach infers which register to use from what gets said (see the "WHO YOU
+ * ARE TALKING TO" block in lib/ai/career-ai.ts), so this does not gate anything
+ * — pick any track and then ask whatever you like. What it does is TELL a first
+ * time visitor that all three are on the table, which a list of five resume
+ * prompts actively hides. Most teens never discover a capability they were not
+ * shown.
+ *
+ * Ordered deliberately: money first. It is the most urgent need, the least well
+ * served elsewhere, and the reason most of these teens are here.
+ */
+const TRACKS = [
+  {
+    id: 'money',
+    label: 'I need money soon',
+    blurb: 'Fastest realistic path to a first paycheck, including work that needs no papers.',
+    color: '#16A34A',
+    tint: 'var(--et-green-light)',
+    prompts: [
+      'I need to start earning within two weeks — what actually works?',
+      'What can I do at my age without working papers?',
+      'How much should I charge for babysitting around here?',
+    ],
+  },
+  {
+    id: 'record',
+    label: 'Build something real',
+    blurb: 'Turn what you already do into a reference an employer will take seriously.',
+    color: '#2563EB',
+    tint: 'var(--et-blue-light)',
+    prompts: [
+      'Help me write a resume when I have no experience',
+      'How do I ask someone to be my reference without it being awkward?',
+      'How do I prepare for a first interview?',
+    ],
+  },
+  {
+    id: 'college',
+    label: 'Thinking about college',
+    blurb: 'How your work and activities actually read to an admissions officer.',
+    color: '#7C3AED',
+    tint: 'var(--et-purple-light)',
+    prompts: [
+      'Does a part-time job help or hurt my college application?',
+      'What is genuinely weak about my profile right now?',
+      'I want to study business — what should I be doing this year?',
+    ],
+  },
+] as const
 
 function LogoMark({ size = 28 }: { size?: number }) {
   // eslint-disable-next-line @next/next/no-img-element
@@ -148,6 +199,13 @@ export default function CareerPage() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [showTyping, setShowTyping] = useState(false)
   const [insights, setInsights] = useState<Insight[]>([])
+  // Which track the teen tapped. Purely a UI affordance for showing that
+  // track's starter questions — the model infers register from what is
+  // actually said, never from this.
+  const [track, setTrack] = useState<string | null>(null)
+  // Read from X-Coach-Remaining. Null until the first reply, so we never show
+  // a limit warning to someone who has not sent anything.
+  const [remaining, setRemaining] = useState<number | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -195,6 +253,7 @@ export default function CareerPage() {
   function clearChat() {
     abortRef.current?.abort()
     setMessages([])
+    setTrack(null)
     try { sessionStorage.removeItem(CHAT_KEY) } catch { /* noop */ }
   }
 
@@ -241,6 +300,9 @@ export default function CareerPage() {
         }),
         signal: abortRef.current.signal,
       })
+
+      const left = res.headers.get('X-Coach-Remaining')
+      if (left !== null) setRemaining(Number(left))
 
       if (!res.body) throw new Error('No stream body')
 
@@ -339,37 +401,45 @@ export default function CareerPage() {
       className="flex flex-col"
       style={{ height: '100dvh', maxHeight: '100dvh', overflow: 'hidden' }}
     >
-      {/* ── Header ── */}
+      {/* ── Header ──
+          Says which model is answering. Not decoration: the marketing page
+          names the model, so the product has to be checkable against the claim
+          from inside the product itself. */}
       <div
-        className="flex-shrink-0 px-5 pt-safe-header pb-4"
+        className="flex-shrink-0 px-5 pt-safe-header pb-3.5"
         style={{ borderBottom: '1px solid var(--et-border)' }}
       >
         <div className="flex items-center gap-3">
           <LogoMark size={32} />
-          <div className="flex-1">
-            <h1 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--et-ink)', letterSpacing: '-0.01em' }}>
-              AI Coach
-            </h1>
-            <div className="flex items-center gap-1.5">
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--et-green)' }} />
-              <p style={{ fontSize: '11px', color: 'var(--et-muted)', fontWeight: 500 }}>
-                Always online · knows your profile
-              </p>
-            </div>
+          <div className="flex-1" style={{ minWidth: 0 }}>
+            <h1 className="display" style={{ fontSize: '17px', lineHeight: 1.15 }}>AI Coach</h1>
+            <p style={{ fontSize: '11px', color: 'var(--et-muted)', marginTop: 2 }}>
+              Knows your profile, your matches and what you have applied to
+            </p>
           </div>
           {messages.length > 0 && (
             <button
               onClick={clearChat}
+              className="press"
               style={{
                 fontSize: '12px', fontWeight: 600, color: 'var(--et-muted)',
                 background: 'var(--et-surface)', border: '1px solid var(--et-border-mid)',
-                borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
+                borderRadius: 10, padding: '6px 12px', cursor: 'pointer', flexShrink: 0,
               }}
             >
               New chat
             </button>
           )}
         </div>
+
+        {/* Warn while there is still room to plan around it, not at zero. */}
+        {remaining !== null && remaining <= 8 && (
+          <p style={{ fontSize: '11px', color: remaining <= 2 ? 'var(--et-amber)' : 'var(--et-placeholder)', marginTop: 8 }}>
+            {remaining === 0
+              ? 'No messages left today. Resets at midnight UTC.'
+              : `${remaining} message${remaining === 1 ? '' : 's'} left today`}
+          </p>
+        )}
       </div>
 
       {/* ── Messages ── */}
@@ -378,96 +448,134 @@ export default function CareerPage() {
         style={{ paddingTop: 16, paddingBottom: 8 }}
       >
         {isEmpty ? (
-          /* Empty state */
+          /* ── Empty state ──
+             Three tracks instead of a flat prompt list. See TRACKS at the top
+             of this file for why: a list of five resume prompts silently tells
+             a teen who needs bus fare by Friday that this tool is not for them.
+             Tapping a track only reveals its starter questions — the model
+             infers register from what actually gets typed, so nothing here
+             locks anyone into a lane. */
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-col items-center"
-            style={{ paddingTop: 24, paddingBottom: 16 }}
+            style={{ paddingTop: 18, paddingBottom: 16 }}
           >
-            {/* AI avatar */}
-            <div
-              style={{
-                width: 64, height: 64,
-                borderRadius: 'var(--radius-lg)',
-                background: 'linear-gradient(135deg, #EFF6FF, #F5F3FF)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                marginBottom: 16,
-              }}
-            >
-              <LogoMark size={36} />
-            </div>
-
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--et-ink)', letterSpacing: '-0.02em', textAlign: 'center', marginBottom: 6 }}>
-              What can I help with?
+            <h2 className="display display-lg" style={{ lineHeight: 1.18 }}>
+              What are you<br />trying to do?
             </h2>
-            <p style={{ fontSize: '13px', color: 'var(--et-muted)', textAlign: 'center', marginBottom: 24, lineHeight: 1.5 }}>
-              Resume, interviews, applications, work permits — ask anything.
+            <p style={{ fontSize: '13.5px', color: 'var(--et-muted)', marginTop: 8, marginBottom: 20, lineHeight: 1.55 }}>
+              Pick whichever is closest, or just start typing. You can ask about
+              anything from either side of this.
             </p>
 
-            {/* Proactive insights — from the user's actual data */}
+            {/* Proactive insights — computed from this user's real data, so
+                they sit above the generic tracks. */}
             {insights.length > 0 && (
-              <div className="flex flex-col gap-2 w-full" style={{ marginBottom: 14 }}>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--et-placeholder)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                  For you today
-                </p>
+              <div className="flex flex-col gap-2" style={{ marginBottom: 20 }}>
+                <p className="numbered-eyebrow">FOR YOU TODAY</p>
                 {insights.map((ins, i) => (
                   <motion.button
                     key={ins.type}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.04 * i, ease: [0.22, 1, 0.36, 1] }}
-                    whileTap={{ scale: 0.97 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => sendMessage(ins.prompt)}
+                    className="grad-border"
                     style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'linear-gradient(135deg, #EFF6FF, #F5F3FF)',
-                      border: '1px solid rgba(124,58,237,0.18)',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: 'var(--et-ink)',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      boxShadow: 'var(--shadow-xs)',
+                      width: '100%', padding: '13px 15px', textAlign: 'left',
+                      background: 'var(--et-surface)', cursor: 'pointer',
+                      fontSize: '13px', fontWeight: 600, color: 'var(--et-ink)', lineHeight: 1.45,
                     }}
                   >
-                    ✨ {ins.text}
+                    {ins.text}
                   </motion.button>
                 ))}
               </div>
             )}
 
-            {/* Suggested prompts */}
-            <div className="flex flex-col gap-2 w-full">
-              {SUGGESTED_PROMPTS.map((prompt, i) => (
-                <motion.button
-                  key={prompt}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 * i, ease: [0.22, 1, 0.36, 1] }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => sendMessage(prompt)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--et-surface)',
-                    border: '1px solid var(--et-border)',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    color: 'var(--et-subtle)',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    boxShadow: 'var(--shadow-xs)',
-                    transition: 'border-color 0.12s ease',
-                  }}
-                >
-                  {prompt}
-                </motion.button>
-              ))}
+            <div className="flex flex-col gap-2.5">
+              {TRACKS.map((t, i) => {
+                const open = track === t.id
+                return (
+                  <motion.div
+                    key={t.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.06 * i, ease: [0.22, 1, 0.36, 1] }}
+                    style={{
+                      borderRadius: 18,
+                      border: `1px solid ${open ? t.color : 'var(--et-border)'}`,
+                      background: open ? t.tint : 'var(--et-surface)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <button
+                      onClick={() => setTrack(open ? null : t.id)}
+                      className="press"
+                      style={{
+                        width: '100%', textAlign: 'left', cursor: 'pointer',
+                        background: 'none', border: 'none', padding: '14px 15px',
+                        display: 'flex', alignItems: 'flex-start', gap: 12,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 9, height: 9, borderRadius: '50%', background: t.color,
+                          flexShrink: 0, marginTop: 5,
+                        }}
+                      />
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span className="display" style={{ display: 'block', fontSize: '15px' }}>{t.label}</span>
+                        <span style={{ display: 'block', fontSize: '12.5px', color: 'var(--et-subtle)', marginTop: 3, lineHeight: 1.45 }}>
+                          {t.blurb}
+                        </span>
+                      </span>
+                      <motion.span
+                        animate={{ rotate: open ? 90 : 0 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                        style={{ flexShrink: 0, marginTop: 3, lineHeight: 0 }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M6 3.5L10.5 8L6 12.5" stroke={open ? t.color : 'var(--et-placeholder)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </motion.span>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {open && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                          style={{ overflow: 'hidden' }}
+                        >
+                          <div className="flex flex-col gap-1.5" style={{ padding: '0 15px 14px' }}>
+                            {t.prompts.map((q) => (
+                              <button
+                                key={q}
+                                onClick={() => sendMessage(q)}
+                                className="press"
+                                style={{
+                                  width: '100%', textAlign: 'left', cursor: 'pointer',
+                                  background: 'var(--et-surface)',
+                                  border: '1px solid var(--et-border)',
+                                  borderRadius: 12, padding: '10px 12px',
+                                  fontSize: '13px', color: 'var(--et-subtle)', lineHeight: 1.45,
+                                }}
+                              >
+                                {q}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                )
+              })}
             </div>
           </motion.div>
         ) : (

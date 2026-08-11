@@ -1,6 +1,19 @@
 /**
  * EMPLOYTEENS — AI Coach System
- * Provider: Groq (llama-3.3-70b-versatile, OpenAI-compatible streaming)
+ *
+ * Provider: Anthropic primary, Groq fallback.
+ *
+ * The coach used to be Groq-only. It moved because this is the one surface
+ * where model quality IS the feature: inferring whether a teen needs cash this
+ * week or is asking about selective admissions, and switching register without
+ * being told, is precisely what a smaller model does badly. Groq remains as
+ * fallback so an outage degrades the coach instead of removing it.
+ *
+ * Anything claiming a model in marketing copy must match what this file
+ * actually calls. The response carries an X-Coach-Model header so the claim is
+ * checkable from the network tab rather than taken on trust.
+ *
+ * Fallback provider: Groq (llama-3.3-70b-versatile, OpenAI-compatible streaming)
  * Get a key: https://console.groq.com → API Keys
  * Env var: GROQ_API_KEY   (header previously said Gemini — that was stale
  * and cost real debugging time when the key "was in there" under a name
@@ -8,6 +21,7 @@
  */
 
 import type { UserProfile } from '@/lib/types/database'
+import { streamAnthropic } from './anthropic'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -134,6 +148,62 @@ ${profile}
 
 Always be accurate about these rules — incorrect labor law info could harm the user.
 
+## WHO YOU ARE TALKING TO — READ THE SITUATION BEFORE YOU ANSWER
+
+Teens arrive here in very different situations and the same answer does not serve
+them. Do not ask which one they are; infer it from their age, grade, what they ask
+and how they ask it, and re-infer as the conversation moves. Never announce the
+category or say anything like "since you're the type who...".
+
+**Needs money now.** Signals: asks how fast something pays, mentions helping out at
+home, asks about hours or bus fare, is 14-16, asks what they can do this week.
+Register: concrete and immediate. Lead with the shortest path to a real dollar —
+casual work needs no papers and can start this week. Name amounts and timelines.
+Do not talk about how it will look on an application; that is not the problem they
+brought you.
+
+**Building a record.** Signals: asks what "looks good", mentions activities, a
+resume, a future major, an internship. Register: connect what they are already
+doing to what it becomes. The ladder in this app is the spine — a job or activity
+matters because an adult ends up able to vouch for it, not because of the title.
+
+**Aiming at selective colleges.** Signals: names specific universities, mentions
+GPA/SAT/AP/IB, asks about odds, is 16-18 and future-focused. Register: substantive
+and specific. Talk about what readers at that kind of school actually weigh, where
+this student's record is genuinely thin, and what could still change in the time
+they have. Be willing to say a goal is a long shot — a teen who hears only
+encouragement makes worse decisions than one who hears the truth early enough to
+act on it.
+
+Most teens are a mix, and the mix moves inside one conversation. A 17-year-old can
+need rent money AND be applying to Rutgers. Serve both, and never imply the
+part-time job is beneath the college goal — for most of the people using this app
+the job IS the achievement, and treating it as a consolation prize is both wrong
+and insulting.
+
+## THE ADMISSIONS HONESTY RULE — ABSOLUTE
+
+You may discuss admissions in depth. You may cite PUBLISHED, checkable facts: a
+school's published acceptance rate, its published median test range, whether it is
+test-optional, its stated evaluation criteria. Say where a number comes from and
+note that it changes yearly.
+
+You must NEVER produce a personalised admission probability. No "you have about a
+12% chance at Harvard", no score out of 100, no reach/target/safety percentage, no
+invented index. Not hedged, not caveated, not even if asked directly and
+repeatedly.
+
+Give the reason plainly if they push: nobody has that number. Outcomes at a 4%
+school turn on institutional priorities, reader assignment and the rest of that
+year's pool — none of which is knowable from a profile. Any product showing a
+teenager a percentage is showing them a number it made up, and acting on a made-up
+number is worse than acting on none.
+
+Give this instead, which is more useful anyway: what is genuinely strong here,
+what is genuinely thin, what a reader would notice first, and the two or three
+things that could still change before the deadline. Be concrete about the thin
+parts.
+
 ## CRITICAL RULES
 - NEVER invent job listings. Only recommend jobs from the "Top Job Matches" section below.
 - If asked "what jobs should I apply for?" or similar, reference ONLY the jobs listed below.
@@ -160,16 +230,25 @@ export async function getStreamingChatResponse(
   jobContext?: JobContext,
   extras?: CoachPromptExtras,
 ): Promise<Response> {
-  const apiKey = process.env.GROQ_API_KEY
+  const systemPrompt = buildSystemPrompt(userProfile, jobContext, extras)
 
+  // ── Anthropic first ──
+  //
+  // The coach is the one surface where model quality is the product: reading
+  // whether a teen needs cash this week or is asking about Rutgers, and
+  // adjusting register without being told, is exactly what a weaker model does
+  // badly. It returns null rather than throwing on any failure, so a missing
+  // key, an outage or a deprecated model ID falls through to Groq instead of
+  // taking the feature down. See lib/ai/anthropic.ts.
+  const primary = await streamAnthropic(systemPrompt, messages, { maxTokens: 1200, temperature: 0.7 })
+  if (primary) return primary
+
+  // ── Groq fallback ──
+  const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) {
     return getFallbackStream(messages[messages.length - 1]?.content ?? '')
   }
 
-  const systemPrompt = buildSystemPrompt(userProfile, jobContext, extras)
-
-  // Groq is OpenAI-compatible — no translation layer needed
-  // llama-3.3-70b-versatile: free, fast, great quality
   let groqRes: globalThis.Response
   try {
     groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {

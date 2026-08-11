@@ -168,6 +168,17 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
   // Curated city programs are honestly labeled — they're program pages with
   // an application flow, not single-position postings, so the CTA says what
   // actually happens ("Learn & apply"), and a City program badge marks them.
+  // Did anyone other than our own legal table set this age? An employer age
+  // is only ever populated when the posting states one or a trusted source
+  // declared it — see resolveAllAgeFacts. Null means "we never checked", and
+  // that is a different claim from "they accept 14".
+  const employerAgeKnown =
+    typeof job.employer_min_age === 'number' ||
+    // At or above 16 the two rarely disagree and the claim is uncontroversial;
+    // the risk is specifically in asserting a BELOW-16 employer policy we do
+    // not have. Keeps 339 ordinary 16+ listings from all going grey.
+    (typeof job.min_age === 'number' && job.min_age >= 16)
+
   const isProgram = job.source === 'local' &&
     (job.job_type === 'program' || job.job_type === 'volunteer' || job.job_type === 'seasonal')
   // Age tags are redundant with the dedicated "Ages N+" badge below
@@ -299,7 +310,32 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
           ) : (
             <span className="pill">Pay not listed</span>
           )}
-          <span className="pill pill-green">Ages {job.min_age}+</span>
+          {/* THE AGE CLAIM — read this before changing it.
+              This said "Ages 14+" in green, which reads as a fact about the
+              EMPLOYER. It is not. resolveAllAgeFacts computes
+                effective = max(legal, hours, employer ?? 0, brandFloor)
+              so when we have no employer policy, `employer ?? 0` contributes
+              nothing and effective silently collapses to what the LAW allows.
+
+              For Eataly that produced "Ages 14+" from the reason string
+              "NY permits at 14: supermarket and food store; employer policy
+              unknown". We had never checked whether Eataly hires 14-year-olds.
+              Telling a 14-year-old they qualify, in green, on our say-so, is
+              exactly the failure the legal/employer split exists to prevent.
+
+              So: green only when the employer's own posting stated an age, or
+              a trusted source declared one. Otherwise muted, and the label
+              says whose rule it is. */}
+          {employerAgeKnown ? (
+            <span className="pill pill-green">Ages {job.min_age}+</span>
+          ) : (
+            <span
+              className="pill pill-muted"
+              title="This is the legal minimum for this kind of work in your state. We have not confirmed the employer's own policy."
+            >
+              {job.min_age}+ by law · employer unconfirmed
+            </span>
+          )}
           {job.distance_miles !== undefined && (
             <span className="pill">
               {job.distance_miles < 1 ? 'Under 1 mi' : `${job.distance_miles.toFixed(1)} mi`}

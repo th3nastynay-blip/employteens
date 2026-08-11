@@ -77,7 +77,7 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
   // An ORDERED chain, not a single URL. Each source 404s honestly when it has
   // nothing, so onError advancing the index is a real signal rather than a
   // guess. Index past the end = every source failed = brand tile.
-  const sources = src ? [src] : brand ? logoSources(brand.domain, size * 2) : []
+  const sources = src ? [src] : brand ? logoSources(brand, size * 2) : []
   const [idx, setIdx] = useState(0)
 
   const resolved = idx < sources.length ? sources[idx] : null

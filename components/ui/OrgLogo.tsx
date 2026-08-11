@@ -31,7 +31,7 @@
  */
 
 import { useState } from 'react'
-import { brandFor, faviconFor } from '@/lib/jobs/brands'
+import { brandFor, logoSources } from '@/lib/jobs/brands'
 
 /** White text on dark brands, dark text on pale ones (Glossier pink). */
 function readableOn(hex: string): string {
@@ -72,19 +72,21 @@ interface Props {
 }
 
 export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
-  const [failed, setFailed] = useState(false)
-
-  // Verified domains only, from lib/jobs/brands.ts. There is no name-guessing
-  // path any more — that is what produced a fabricated logo last time.
   const brand = brandFor(name)
-  const resolved = src ?? (brand ? faviconFor(brand.domain) : null)
-  const showImage = Boolean(resolved) && !failed
+
+  // An ORDERED chain, not a single URL. Each source 404s honestly when it has
+  // nothing, so onError advancing the index is a real signal rather than a
+  // guess. Index past the end = every source failed = brand tile.
+  const sources = src ? [src] : brand ? logoSources(brand.domain, size * 2) : []
+  const [idx, setIdx] = useState(0)
+
+  const resolved = idx < sources.length ? sources[idx] : null
+  const showImage = Boolean(resolved)
   const initials = initialsOf(name)
 
-  // The whole point of the brand colour: when the favicon fails — and it will,
-  // unpredictably — we do not fall back to grey. Target still reads as red,
-  // Starbucks still reads as green. Recognisable either way, consistent either
-  // way, and it no longer matters whether we can detect the miss.
+  // When every source fails we do NOT fall back to grey. Target still reads
+  // red, Starbucks still reads green, so the feed stays recognisable and
+  // consistent even on a total network miss.
   const tint = !showImage && brand ? brand.color : null
 
   return (
@@ -113,11 +115,15 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
           width={size}
           height={size}
           loading="lazy"
-          onError={() => setFailed(true)}
+          // Advance to the next source. Because these 404 properly, this
+          // fires for real misses rather than silently accepting an invented
+          // placeholder.
+          onError={() => setIdx((i) => i + 1)}
           onLoad={(e) => {
-            // Backstop for the placeholder-globe case on curated rows.
+            // Belt and braces: anything decoding under 32px is a placeholder,
+            // whatever served it.
             const img = e.currentTarget
-            if (img.naturalWidth > 0 && img.naturalWidth < 32) setFailed(true)
+            if (img.naturalWidth > 0 && img.naturalWidth < 32) setIdx((i) => i + 1)
           }}
           style={{
             width: '100%',

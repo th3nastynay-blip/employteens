@@ -115,7 +115,28 @@ export function brandFor(company: string | null | undefined): Brand | null {
   return null
 }
 
-/** Favicon URL for a verified domain. Only ever called with a table entry. */
-export function faviconFor(domain: string, size = 128): string {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`
+/**
+ * Logo sources, in order, for a verified domain.
+ *
+ * GOOGLE IS GONE. `google.com/s2/favicons` does not 404 when it has no icon —
+ * it GENERATES a coloured letter tile and serves it with HTTP 200. That is
+ * what put a green "L" on Insomnia Cookies and it is undetectable from the
+ * client: a fabricated logo and a real one look identical to onError, to the
+ * status code, and (at 128px) to a size check. Four attempts died on this.
+ *
+ * Both sources below return a real 404 when they have nothing, which is the
+ * only property that matters — it makes onError meaningful, so the chain can
+ * fall through deterministically to the brand-colour tile.
+ *
+ *   1. Clearbit Logo API — actual brand marks, transparent PNG, built for
+ *      exactly this. Best quality for chains.
+ *   2. unavatar.io with fallback=false — aggregates several sources; the flag
+ *      is what forces a 404 instead of a generated placeholder.
+ *   3. (handled in OrgLogo) the employer's initial on the employer's colour.
+ */
+export function logoSources(domain: string, size = 128): string[] {
+  return [
+    `https://logo.clearbit.com/${domain}?size=${size}`,
+    `https://unavatar.io/${domain}?fallback=false`,
+  ]
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -14,6 +14,7 @@ import {
 } from '@/lib/types/onboarding'
 import type { UserProfile } from '@/lib/types/database'
 import { ProfileHeader, type ProfileStep } from '@/components/profile/ProfileHeader'
+import { ReferenceCard, type ReferenceState } from '@/components/profile/ReferenceCard'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -187,8 +188,7 @@ export default function ProfilePage() {
   const [savedCount, setSavedCount] = useState(0)
   const [appliedCount, setAppliedCount] = useState(0)
 
-  useEffect(() => {
-    async function load() {
+  const load = useCallback(async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
@@ -211,9 +211,16 @@ export default function ProfilePage() {
       } finally {
         setLoading(false)
       }
-    }
-    load()
   }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load()
+  }, [load])
+
+  // Called after the reference form saves, so the card flips from the form to
+  // the pending state without a manual refresh.
+  const reload = useCallback(() => { void load() }, [load])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -271,6 +278,17 @@ export default function ProfilePage() {
     availableDays.length > 0 ? `${availableDays.length} days free` : null,
   ].filter((x): x is string => Boolean(x))
 
+  const p = profile as unknown as Record<string, unknown>
+  const referenceState: ReferenceState = {
+    name: (p.reference_name as string | null) ?? null,
+    role: (p.reference_role as string | null) ?? null,
+    org: (p.reference_org as string | null) ?? null,
+    confirmedAt: (p.reference_confirmed_at as string | null) ?? null,
+    confirmedBy: (p.reference_confirmed_by as string | null) ?? null,
+    declinedAt: (p.reference_declined_at as string | null) ?? null,
+    token: (p.reference_token as string | null) ?? null,
+  }
+
   // One circle per thing we actually need. `done` is derived from the data,
   // never asserted — an empty array is not a completed step.
   const steps: ProfileStep[] = [
@@ -282,6 +300,9 @@ export default function ProfilePage() {
     { id: 'interests', label: 'Interests', done: interests.length > 0 },
     { id: 'skills', label: 'Skills', done: skills.length > 0 },
     { id: 'resume', label: 'Resume', done: Boolean(profile.resume_url) },
+    // Only counts once the adult has actually confirmed. Naming someone is
+    // asking, not having.
+    { id: 'reference', label: 'Reference', done: Boolean(referenceState.confirmedAt) },
   ]
 
   return (
@@ -369,6 +390,12 @@ export default function ProfilePage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ── Reference ──
+            Sits high on the page on purpose. It is the only claim here that
+            somebody other than the teen can confirm, so it outranks the
+            insights, the availability grid and everything below it. */}
+        <ReferenceCard reference={referenceState} onSaved={reload} />
 
         {/* ── AI Insights ── */}
         {insights.length > 0 && (

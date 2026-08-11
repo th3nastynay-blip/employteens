@@ -90,7 +90,9 @@ export function OpportunitySheet({ item, hasPapers, upcoming = false, onClose }:
             transition={{ duration: 0.18 }}
             onClick={onClose}
             style={{
-              position: 'fixed', inset: 0, zIndex: 90,
+              // Above .bottom-nav (z-index 100). At 90 the nav sat ON TOP of
+              // the sheet and swallowed the Apply button on desktop.
+              position: 'fixed', inset: 0, zIndex: 200,
               background: 'rgba(15, 17, 21, 0.45)',
               backdropFilter: 'blur(3px)',
             }}
@@ -102,8 +104,14 @@ export function OpportunitySheet({ item, hasPapers, upcoming = false, onClose }:
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 320 }}
             style={{
-              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 91,
+              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 201,
               maxHeight: '90vh',
+              // On a phone this is edge to edge. On desktop, left:0/right:0
+              // stretched it across the whole viewport and the description ran
+              // to ~200 characters a line, which is unreadable. Capped and
+              // centred; 560 keeps line length in the 60-75 character range
+              // that prose actually wants.
+              maxWidth: 560, marginLeft: 'auto', marginRight: 'auto',
               display: 'flex', flexDirection: 'column',
               background: 'var(--et-surface)',
               borderTopLeftRadius: 24, borderTopRightRadius: 24,

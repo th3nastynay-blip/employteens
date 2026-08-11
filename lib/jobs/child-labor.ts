@@ -347,6 +347,17 @@ export function resolveAllAgeFacts(args: {
   effective_min_age: number
   work_state: StateCode
   reasons: string[]
+  /**
+   * False when NO occupation rule matched and the number is the fallthrough
+   * default rather than a verdict.
+   *
+   * This has to leave the function. Without it, "we have never seen this kind
+   * of work" and "the law says 16" are the same integer, and callers cannot
+   * tell them apart. That is not academic: the audit fell through to 16 on
+   * "Associate Fire Protection Inspector II" and "AIU Psychologist" and
+   * rewrote both DOWN from 18. Ignorance must never relax a gate.
+   */
+  legal_matched: boolean
 } {
   const work_state = stateFromLocation(args.location)
   const reasons: string[] = []
@@ -372,7 +383,7 @@ export function resolveAllAgeFacts(args: {
     // Hand-verified program entry. Trust it outright, but never below the law.
     const effective = Math.max(args.declaredMinAge, legal.legal_min_age)
     reasons.push('hand-verified entry')
-    return { legal_min_age: legal.legal_min_age, employer_min_age: args.declaredMinAge, effective_min_age: effective, work_state, reasons }
+    return { legal_min_age: legal.legal_min_age, employer_min_age: args.declaredMinAge, effective_min_age: effective, work_state, reasons, legal_matched: legal.matched }
   }
 
   const hours = detectHoursConflicts(`${args.title} ${args.description ?? ''}`, work_state, args.schoolInSession ?? true)
@@ -394,7 +405,7 @@ export function resolveAllAgeFacts(args: {
     brandFloor,
   )
 
-  return { legal_min_age: legal.legal_min_age, employer_min_age, effective_min_age, work_state, reasons }
+  return { legal_min_age: legal.legal_min_age, employer_min_age, effective_min_age, work_state, reasons, legal_matched: legal.matched }
 }
 
 /**

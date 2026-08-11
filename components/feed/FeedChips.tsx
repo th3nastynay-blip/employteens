@@ -37,23 +37,10 @@ export function FeedChips({ active, counts, onToggle }: Props) {
             whileTap={{ scale: 0.96 }}
             onClick={() => onToggle(chip.id)}
             aria-pressed={on}
-            style={{
-              flexShrink: 0,
-              height: 36,
-              padding: '0 14px',
-              borderRadius: 999,
-              fontSize: '13px',
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-              cursor: 'pointer',
-              background: on ? 'var(--et-blue)' : 'var(--et-surface)',
-              color: on ? '#fff' : empty ? 'var(--et-placeholder)' : 'var(--et-subtle)',
-              border: `1.5px solid ${on ? 'var(--et-blue)' : 'var(--et-border-mid)'}`,
-              opacity: empty ? 0.55 : 1,
-            }}
+            className={`fchip${on ? ' fchip-on' : ''}${empty ? ' fchip-empty' : ''}`}
           >
             {chip.label}
-            <span style={{ marginLeft: 6, fontWeight: 600, opacity: 0.75 }}>{n}</span>
+            <span className="fchip-count">{n}</span>
           </motion.button>
         )
       })}

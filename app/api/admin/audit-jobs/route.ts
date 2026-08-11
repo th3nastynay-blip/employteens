@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { verifyJobUrl } from '@/lib/jobs/verify-url'
 import { cleanJobTitle } from '@/lib/jobs/clean-title'
-import { isTeenAppropriateTitle, MAX_TEEN_AGE } from '@/lib/jobs/teen-scoring'
+import { isTeenAppropriateTitle, teenTitleVerdict, MAX_TEEN_AGE } from '@/lib/jobs/teen-scoring'
 import { resolveAllAgeFacts } from '@/lib/jobs/child-labor'
 import { isInMarket } from '@/lib/jobs/geo'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from '@/lib/jobs/quality-score'
@@ -39,7 +39,24 @@ export const maxDuration = 60
 // v5: age re-resolution. Every v4 row was aged by the company-name-only
 // heuristic, so they all need a second pass against the new description-aware
 // resolver.
-const AUDIT_MARK = '_audited:v6'
+//
+// v7 (2026-08-10): the v6 run did damage and this pass is partly a repair.
+//
+// v6 ran on ~206 rows before it was stopped. On those rows an unmatched
+// occupation fell through to the 16 default and OVERWROTE stricter existing
+// values — "Associate Fire Protection Inspector II", "AIU Psychologist" and
+// "Renew Crew APSW – Heavy Duty", all City of New York municipal postings,
+// went from 18 down to 16. Two things were wrong at once: resolveAllAgeFacts
+// dropped its `matched` flag so callers could not tell a verdict from a
+// fallthrough, and isTeenAppropriateTitle was a pure blocklist that passed
+// every title it had never seen.
+//
+// Both are fixed (the ratchet below, and teenTitleVerdict). BE HONEST ABOUT
+// THE LIMIT: the ratchet cannot undo v6, because the pre-v6 value is gone from
+// the row. What repairs those rows is the title whitelist — a municipal
+// inspector post is not a teen job at any age, so the age it carries stops
+// mattering once the row is out of the feed.
+const AUDIT_MARK = '_audited:v7'
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -151,6 +168,15 @@ export async function POST(req: NextRequest) {
     // Rows that got YOUNGER. This is legal 14 and 15 inventory the old
     // heuristic was hiding, and it is the number worth watching.
     age_unlocked: 0,
+    // Rows where the fallthrough default WOULD have lowered an existing,
+    // stricter age and the ratchet stopped it. A non-zero number here means
+    // the occupation rules have a gap worth filling.
+    age_held: 0,
+    // Rows no occupation rule recognised at all. Tagged '_age:unmatched'.
+    age_unmatched: 0,
+    // Titles matching neither the adult blocklist nor the teen whitelist.
+    title_unknown: 0,
+    title_unknown_samples: [] as string[],
     // Legal below 16 but employer policy unconfirmed: the outreach call list.
     verify_candidates: 0,
     retitled: 0,
@@ -189,6 +215,20 @@ export async function POST(req: NextRequest) {
         continue
       }
 
+      // Titles we do not recognise at all. Counted and tagged, NOT flagged —
+      // the blocklist-to-whitelist change is new and flagging on its first run
+      // could hide a large slice of legitimate inventory over a regex gap.
+      // Run with dry=1, read title_unknown and title_unknown_samples, then
+      // decide whether to start flagging. Measure before you destroy.
+      let titleUnknownTag: string | null = null
+      if (!isProgram && teenTitleVerdict(job.title as string) === 'unknown') {
+        counters.title_unknown++
+        titleUnknownTag = '_title:unreviewed'
+        if (counters.title_unknown_samples.length < 20) {
+          counters.title_unknown_samples.push(`${job.company} — ${String(job.title).slice(0, 60)}`)
+        }
+      }
+
       // Adult roles (VP, Director, Engineer, Bartender…) have no business on
       // a teen job board regardless of how legitimate the posting is. Cheap
       // check first — skips the network fetch entirely.
@@ -217,6 +257,7 @@ export async function POST(req: NextRequest) {
       // the age from the description and corrects the row in place. Program
       // pages keep their hand-verified age.
       let ageUpdate: Record<string, unknown> | null = null
+      let unmatchedTag: string | null = null
       if (!isProgram) {
         const facts = resolveAllAgeFacts({
           title: job.title as string,
@@ -225,25 +266,52 @@ export async function POST(req: NextRequest) {
           location: job.location as string | null,
         })
 
+        // THE RATCHET.
+        //
+        // When no occupation rule matched, resolveLegalMinAge falls through to
+        // 16. That is a placeholder, not a finding — and on the v6 run it did
+        // real damage: "Associate Fire Protection Inspector II", "AIU
+        // Psychologist" and "Renew Crew APSW – Heavy Duty" all fell through
+        // and were rewritten from 18 DOWN to 16, which would have published
+        // municipal professional roles to 16-year-olds.
+        //
+        // So: a guess may RAISE a gate but never lower one. Only a matched
+        // occupation rule, or the employer's own stated age, is allowed to
+        // relax what is already on the row.
+        const isGuess = !facts.legal_matched && facts.employer_min_age === null
+        const existingAge = typeof job.min_age === 'number' ? job.min_age : facts.effective_min_age
+        const resolvedAge = isGuess
+          ? Math.max(existingAge, facts.effective_min_age)
+          : facts.effective_min_age
+        if (isGuess && resolvedAge !== facts.effective_min_age) counters.age_held++
+
         ageUpdate = {
-          min_age: facts.effective_min_age,
+          min_age: resolvedAge,
           legal_min_age: facts.legal_min_age,
           employer_min_age: facts.employer_min_age,
           work_state: facts.work_state,
           min_age_reason: facts.reasons.join('; ').slice(0, 500),
         }
 
-        if (facts.effective_min_age !== job.min_age) {
+        // An unrecognised occupation is a row we know nothing about. Tag it so
+        // it is queryable for review instead of sitting in the feed looking
+        // exactly like a row we actually checked.
+        if (isGuess) {
+          counters.age_unmatched++
+          unmatchedTag = '_age:unmatched'
+        }
+
+        if (resolvedAge !== job.min_age) {
           counters.age_corrected++
           // Rows moving DOWN are the commercially interesting ones: legally
           // 14-eligible work the old company-name-only heuristic was hiding.
-          if (facts.effective_min_age < (job.min_age as number)) counters.age_unlocked++
+          if (resolvedAge < (job.min_age as number)) counters.age_unlocked++
           if (counters.age_samples.length < 8) {
             counters.age_samples.push({
               company: job.company as string,
               title: String(job.title).slice(0, 60),
               from: job.min_age as number,
-              to: facts.effective_min_age,
+              to: resolvedAge,
               why: facts.reasons.join('; ').slice(0, 160),
             })
           }
@@ -257,7 +325,7 @@ export async function POST(req: NextRequest) {
 
         // Above 19 nobody on the platform can apply. Flag rather than silently
         // leave it visible to the oldest users.
-        if (facts.effective_min_age > MAX_TEEN_AGE) {
+        if (resolvedAge > MAX_TEEN_AGE) {
           counters.flagged_over_age++
           if (!dryRun) {
             await supabase.from('jobs').update({
@@ -309,10 +377,12 @@ export async function POST(req: NextRequest) {
       }
 
       const newTags = Array.from(new Set([
-        ...((job.tags as string[] | null) ?? []).filter((t) => !t.startsWith('_q:') && !t.startsWith('_audited:') && !t.startsWith('_orig:')),
+        ...((job.tags as string[] | null) ?? []).filter((t) => !t.startsWith('_q:') && !t.startsWith('_audited:') && !t.startsWith('_orig:') && t !== '_age:unmatched' && t !== '_title:unreviewed'),
         ...cleaned.tags,
         qualityTag(quality.score),
         AUDIT_MARK,
+        ...(unmatchedTag ? [unmatchedTag] : []),
+        ...(titleUnknownTag ? [titleUnknownTag] : []),
         ...(cleaned.title !== job.title ? [`_orig:${String(job.title).slice(0, 80)}`] : []),
       ]))
 
@@ -393,6 +463,10 @@ export async function POST(req: NextRequest) {
     // the first run is the size of the "sent a 16-year-old to an 18+ job" bug.
     age_corrected: counters.age_corrected,
     age_unlocked: counters.age_unlocked,
+    age_held: counters.age_held,
+    age_unmatched: counters.age_unmatched,
+    title_unknown: counters.title_unknown,
+    title_unknown_samples: counters.title_unknown_samples,
     verify_candidates: counters.verify_candidates,
     age_samples: counters.age_samples,
     avg_quality_score: avg,

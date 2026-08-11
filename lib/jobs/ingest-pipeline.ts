@@ -17,7 +17,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import { verifyJobUrl, isGenericCareerPage, type VerificationResult } from './verify-url'
-import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, isTeenAppropriateTitle, MAX_TEEN_AGE } from './teen-scoring'
+import { getCompanyProfile, scoreTeenFriendliness, detectScamRisk, teenTitleVerdict, MAX_TEEN_AGE } from './teen-scoring'
 import { resolveAllAgeFacts } from './child-labor'
 import { cleanJobTitle } from './clean-title'
 import { computeQualityScore, qualityTag, MIN_QUALITY_SCORE } from './quality-score'
@@ -254,10 +254,25 @@ export async function ingestNormalizedJobs(
 
       // A teenager can't be your VP of Product. Cheap check, runs before
       // any network call. Curated entries skip it (hand-picked).
-      if (!raw.isProgramPage && !isTeenAppropriateTitle(raw.title)) {
-        stats.rejected_not_teen_job++
-        noteRejection(raw.apply_url, 'not_teen_job', `Adult role title: ${raw.title.slice(0, 60)}`)
-        continue
+      //
+      // At INGEST, unlike the audit, an unrecognised title is rejected rather
+      // than tagged. The asymmetry is deliberate: rejecting a new row costs us
+      // one listing we never had, whereas flagging an existing row takes away
+      // something a teen may already have saved. Cheap to be strict at the
+      // door, expensive to be strict after the fact.
+      if (!raw.isProgramPage) {
+        const verdict = teenTitleVerdict(raw.title)
+        if (verdict !== 'allow') {
+          stats.rejected_not_teen_job++
+          noteRejection(
+            raw.apply_url,
+            'not_teen_job',
+            verdict === 'block'
+              ? `Adult role title: ${raw.title.slice(0, 60)}`
+              : `Unrecognised role title: ${raw.title.slice(0, 60)}`,
+          )
+          continue
+        }
       }
 
       // GEO GATE — cheap, runs before any network call.

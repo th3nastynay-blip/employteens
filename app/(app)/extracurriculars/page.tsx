@@ -205,30 +205,22 @@ export default function ExtracurricularsPage() {
           <button
             key={c.id}
             onClick={() => setCat(c.id)}
-            className="press"
-            style={{
-              flexShrink: 0, height: 34, padding: '0 13px', borderRadius: 999,
-              fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer',
-              fontFamily: 'var(--font-display)',
-              background: cat === c.id ? 'var(--et-ink)' : 'var(--et-surface)',
-              color: cat === c.id ? '#fff' : 'var(--et-subtle)',
-              border: `1.5px solid ${cat === c.id ? 'var(--et-ink)' : 'var(--et-border-mid)'}`,
-            }}
+            aria-pressed={cat === c.id}
+            className={`fchip press${cat === c.id ? ' fchip-on' : ''}`}
           >
             {c.label}
           </button>
         ))}
+        {/* Cost stays green rather than joining the gradient. Money is the one
+            filter that isn't a taste preference — for a lot of these families
+            it's the whole decision, and it should not look like the others. */}
         <button
           onClick={() => setFreeOnly((v) => !v)}
-          className="press"
-          style={{
-            flexShrink: 0, height: 34, padding: '0 13px', borderRadius: 999,
-            fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer',
-            fontFamily: 'var(--font-display)',
-            background: freeOnly ? 'var(--et-green)' : 'var(--et-surface)',
-            color: freeOnly ? '#fff' : 'var(--et-subtle)',
-            border: `1.5px solid ${freeOnly ? 'var(--et-green)' : 'var(--et-border-mid)'}`,
-          }}
+          aria-pressed={freeOnly}
+          className="fchip press"
+          style={freeOnly ? {
+            background: 'var(--et-green)', color: '#fff', borderColor: 'transparent',
+          } : undefined}
         >
           Free only
         </button>

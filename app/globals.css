@@ -526,6 +526,43 @@ body {
    afford needs to see that we do not know. */
 .pill-muted { background: var(--et-surface-2); color: var(--et-placeholder); }
 
+/* ─── Filter chips ──────────────────────────────────────────────────────
+   The most-tapped control in the app, and until now it was styled inline in
+   three separate files with three slightly different blues. One class.
+
+   Active is the blue→purple gradient rather than flat blue, so "this is on"
+   reads identically to the match ring and the hero. A chip that would empty
+   the list is dimmed, never hidden — hiding it teaches a teen the app is
+   small, whereas "Paid 0" tells them the truth and leaves the control where
+   they expect it. */
+.fchip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--et-surface);
+  color: var(--et-subtle);
+  border: 1.5px solid var(--et-border-mid);
+  transition: color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.fchip-on {
+  background: linear-gradient(135deg, var(--et-match-from), var(--et-match-to));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.22);
+}
+.fchip-empty { opacity: 0.5; color: var(--et-placeholder); }
+.fchip-count { margin-left: 6px; font-weight: 600; opacity: 0.7; }
+
 /* ─── Status dot ────────────────────────────────────────────────────────
    Green open, amber closing, grey upcoming. Same three states everywhere. */
 .status-dot {

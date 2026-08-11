@@ -308,21 +308,7 @@ export default function DashboardPage() {
               key={key}
               whileTap={{ scale: 0.95 }}
               onClick={() => setActiveTab(key)}
-              style={{
-                flexShrink: 0,
-                height: '36px',
-                padding: '0 16px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '13px',
-                fontWeight: active ? 700 : 500,
-                border: active ? 'none' : '1.5px solid var(--et-border-mid)',
-                background: active ? 'var(--et-blue)' : 'var(--et-surface)',
-                color: active ? '#fff' : 'var(--et-subtle)',
-                boxShadow: active ? 'var(--shadow-blue-sm)' : 'none',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                letterSpacing: '-0.01em',
-              }}
+              className={`fchip${active ? ' fchip-on' : ''}`}
             >
               {label}{!isLoading && count > 0 ? ` (${count})` : ''}
             </motion.button>

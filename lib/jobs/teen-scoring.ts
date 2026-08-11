@@ -260,8 +260,69 @@ const ADULT_ROLE_PATTERNS: RegExp[] = [
   /\b\d+\+?\s*(years|yrs)\b/i,               // "5+ years" in a title
 ]
 
+/**
+ * Job families a teenager plausibly holds. Title-driven, same shape as
+ * PERMITTED_AT_14 in child-labor.ts and for the same reason: descriptions
+ * mention adjacent work constantly, so matching on them lets unrelated roles
+ * through.
+ *
+ * WHY THIS EXISTS. ADULT_ROLE_PATTERNS above is a blocklist, and a blocklist
+ * silently passes everything it has never seen. On the v6 audit that meant
+ * "AIU Psychologist", "Associate Fire Protection Inspector II" and "Renew Crew
+ * APSW – Heavy Duty" — all City of New York municipal postings — sailed
+ * through isTeenAppropriateTitle and stayed live on a board for
+ * 14-to-19-year-olds. No blocklist is ever finished; every new employer brings
+ * new titles.
+ *
+ * So the verdict is three-valued. Unrecognised is its own answer, and it is
+ * not the same answer as "fine".
+ */
+const TEEN_ROLE_PATTERNS: RegExp[] = [
+  // Retail and general front-line.
+  // "crew" must carry a noun. Bare \bcrew\b matched "Renew Crew APSW – Heavy
+  // Duty", a NYC sanitation posting, and waved it straight through.
+  /\b(crew member|crew associate|team member|sales associate|retail associate|store associate|sales assistant|cashier|bagger|courtesy clerk|greeter|stocker|stock associate|merchandiser|fitting room)\b/i,
+  // Driving is 18+ under REQUIRES_DRIVING, but 18 and 19 year olds are on the
+  // platform, so these are real listings — recognised, then age-gated.
+  /\b(delivery (driver|associate)|driver|courier|bike (courier|delivery))\b/i,
+  // Food service
+  /\b(barista|server|waiter|waitress|host|hostess|busser|dishwasher|line cook|prep cook|cook|food runner|expeditor|sandwich (artist|maker)|pizza maker|scooper|cake decorator)\b/i,
+  // Warehouse and stockroom, non-hazardous
+  /\b(warehouse associate|package handler|order (picker|selector)|fulfillment associate|inventory associate|shopper|picker|packer)\b/i,
+  // Recreation, camp, sport
+  /\b(lifeguard|camp counsellor|camp counselor|swim instructor|referee|umpire|ride operator|park attendant|caddie|ski instructor)\b/i,
+  // Clerical and library
+  /\b(office assistant|clerical assistant|file clerk|data entry|receptionist|front desk|library (page|aide|assistant)|office aide|mail ?room)\b/i,
+  // Tutoring, childcare, animals
+  /\b(tutor|teaching assistant|classroom aide|babysitter|childcare (aide|assistant)|kennel (assistant|attendant)|dog walker|pet care)\b/i,
+  // Service and cleaning
+  /\b(car wash|detailer|custodian|janitorial|housekeep|room attendant|porter|valet|usher|ticket (taker|seller)|concession|attendant)\b/i,
+  // Seasonal and outdoor
+  /\b(landscaping (helper|assistant)|grounds ?keep|snow removal|farm ?hand|harvest|nursery worker|garden cent(er|re))\b/i,
+  // Junior by construction
+  /\b(intern|internship|apprentice|trainee|junior|entry.level|seasonal|summer (associate|help|staff)|student (worker|associate)|shift (lead|leader))\b/i,
+]
+
+export type TeenTitleVerdict = 'allow' | 'block' | 'unknown'
+
+/**
+ * Three-valued so callers can tell "we checked and it is fine" apart from
+ * "we have never seen this kind of work". Publishing an unknown at face value
+ * asserts knowledge we do not have.
+ */
+export function teenTitleVerdict(title: string): TeenTitleVerdict {
+  if (ADULT_ROLE_PATTERNS.some((p) => p.test(title))) return 'block'
+  if (TEEN_ROLE_PATTERNS.some((p) => p.test(title))) return 'allow'
+  return 'unknown'
+}
+
+/**
+ * Kept for existing callers, and deliberately still permissive: it answers
+ * "is this definitely NOT a teen job", so 'unknown' passes. Callers that care
+ * about the difference should use teenTitleVerdict.
+ */
 export function isTeenAppropriateTitle(title: string): boolean {
-  return !ADULT_ROLE_PATTERNS.some((p) => p.test(title))
+  return teenTitleVerdict(title) !== 'block'
 }
 
 export function scoreTeenFriendliness(input: TeenScoreInput): number {

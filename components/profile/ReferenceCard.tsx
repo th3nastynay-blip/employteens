@@ -69,7 +69,7 @@ export function ReferenceCard({ reference, onSaved }: Props) {
         body: JSON.stringify({ name, role, org }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Could not save')
+      if (!res.ok) throw new Error([data.error, data.hint].filter(Boolean).join(' — ') || 'Could not save')
       setLink(data.url)
       setEditing(false)
       onSaved()

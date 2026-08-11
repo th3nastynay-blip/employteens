@@ -55,11 +55,21 @@ export async function POST(req: NextRequest) {
 
   // Reuse the existing token if one is live. Reminting on every edit would
   // silently break a link the teen already sent to their supervisor.
-  const { data: existing } = await supabase
+  const { data: existing, error: readErr } = await supabase
     .from('users')
     .select('reference_token, reference_token_at, reference_confirmed_at')
     .eq('id', user.id)
     .single()
+
+  // A failure HERE means the columns are missing or unreadable, which is a
+  // different problem from the write failing. Worth telling apart.
+  if (readErr && readErr.code !== 'PGRST116') {
+    console.error('[reference] read failed', readErr)
+    return NextResponse.json(
+      { error: `Read failed: ${readErr.message}`, code: readErr.code, hint: readErr.hint },
+      { status: 500 },
+    )
+  }
 
   const keepToken =
     existing?.reference_token && !isExpired(existing.reference_token_at as string | null)
@@ -84,7 +94,16 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', user.id)
 
-  if (error) return NextResponse.json({ error: 'Could not save' }, { status: 500 })
+  // Surface the real Postgres error. The generic "Could not save" this used to
+  // return meant the first failure in production was undiagnosable from the
+  // screen, and I ended up guessing at causes instead of reading one.
+  if (error) {
+    console.error('[reference] update failed', error)
+    return NextResponse.json(
+      { error: error.message, code: error.code, details: error.details, hint: error.hint },
+      { status: 500 },
+    )
+  }
 
   const base = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin
   return NextResponse.json({ ok: true, url: `${base}/vouch/${token}` })

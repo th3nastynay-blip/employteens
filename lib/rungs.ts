@@ -70,6 +70,13 @@ export interface Reference {
   role: string
   /** Where they know each other from. */
   org?: string
+  /**
+   * When the named adult themselves confirmed, via the vouch link. NULL means
+   * the teen typed a name and nobody has agreed to anything yet.
+   *
+   * This is the ONLY field in the whole ladder that is not self-reported.
+   */
+  confirmedAt?: string | null
 }
 
 export interface RungInputs {
@@ -88,20 +95,24 @@ export interface RungResult {
    * 'confirmed' — derived from evidence we hold.
    * 'soft'      — best guess from self-reported input. Never shown as a claim.
    */
-  confidence: 'confirmed' | 'soft'
+  /**
+   * 'verified'      — a third party confirmed it. Today that means exactly one
+   *                   thing: a named adult clicked the vouch link.
+   * 'self_reported' — the teen told us. True of EVERYTHING else on this
+   *                   ladder: working papers, applications, replies, hires.
+   *
+   * This used to read 'confirmed' | 'soft', where 'confirmed' meant "the teen
+   * did not contradict themselves". That wording let us describe a diary as a
+   * credential. A tracker can run on self-report; a claim made to an employer
+   * cannot.
+   */
+  confidence: 'verified' | 'self_reported'
   /** Why we landed here. Rendered in the admin view, not to the teen. */
   reason: string
 }
 
-const DAY = 86_400_000
-
 function isJob(e: LadderEvent): boolean {
   return e.kind === 'job' || e.kind === 'internship' || e.kind === 'gig'
-}
-
-function daysSince(iso: string | null, now: number): number | null {
-  if (!iso) return null
-  return (now - new Date(iso).getTime()) / DAY
 }
 
 /**
@@ -112,7 +123,6 @@ function daysSince(iso: string | null, now: number): number | null {
  * rejected somewhere else has still been hired.
  */
 export function detectRung(input: RungInputs): RungResult {
-  const now = input.now ?? Date.now()
   const events = input.events ?? []
 
   const hires = events.filter((e) => e.outcome === 'hired' || e.status === 'hired')
@@ -121,30 +131,41 @@ export function detectRung(input: RungInputs): RungResult {
   )
   const applied = events.filter((e) => e.applied_at !== null)
 
-  // 7 — trusted. A reference exists: either more than one hire, or a single hire
-  // that lasted long enough to be worth citing. 60 days is roughly a summer.
-  if (hires.length >= 2) {
-    return { rung: 7, confidence: 'confirmed', reason: `${hires.length} hires on record` }
-  }
-  const longHire = hires.find((h) => {
-    const d = daysSince(h.applied_at, now)
-    return d !== null && d >= 60
-  })
-  if (longHire) {
-    return { rung: 7, confidence: 'confirmed', reason: 'hired more than 60 days ago, long enough to be a reference' }
+  // 7 — trusted. Someone other than the teen has vouched for them.
+  //
+  // The confirmed reference comes FIRST and is the only 'verified' rung on the
+  // ladder. That is the whole point of the top rung: not "I did things" but
+  // "an adult will say so".
+  if (input.reference?.name && input.reference.confirmedAt) {
+    return {
+      rung: 7,
+      confidence: 'verified',
+      reason: `${input.reference.name} confirmed they would vouch`,
+    }
   }
 
+  if (hires.length >= 2) {
+    return { rung: 7, confidence: 'self_reported', reason: `${hires.length} hires on record` }
+  }
+
+  // REMOVED: a rule promoting anyone whose APPLICATION was 60+ days old to
+  // rung 7, on the reasoning that it "lasted long enough to be a reference".
+  // It measured days since applying, not days worked. A teen who applied in
+  // June, worked one shift in July and quit came out as "trusted". Tenure
+  // needs a start and end date we do not collect, so rather than approximate
+  // it with the wrong date we now require a real vouch or a second hire.
+
   if (hires.length === 1) {
-    return { rung: 6, confidence: 'confirmed', reason: 'hired' }
+    return { rung: 6, confidence: 'self_reported', reason: 'hired' }
   }
 
   if (responses.length > 0) {
-    return { rung: 5, confidence: 'confirmed', reason: `${responses.length} employer response(s)` }
+    return { rung: 5, confidence: 'self_reported', reason: `${responses.length} employer response(s)` }
   }
 
   // 4 — applied. Only counts for employment. Signing up for a program is rung 2.
   if (applied.some(isJob)) {
-    return { rung: 4, confidence: 'confirmed', reason: 'confirmed job application' }
+    return { rung: 4, confidence: 'self_reported', reason: 'teen confirmed a job application' }
   }
 
   // 3 — someone will vouch. The teen named a specific adult who agreed.
@@ -155,27 +176,29 @@ export function detectRung(input: RungInputs): RungResult {
   // that the teen actually asked someone, which is a thing they almost never
   // think to do while they are still there and which is much harder six months
   // later. We store the name so it can be pasted into an application.
+  // 3 — asked someone. They named an adult; that adult has not replied yet.
+  // Rung 7 is where the adult actually says yes.
   if (input.reference?.name) {
-    return { rung: 3, confidence: 'soft', reason: `named a reference: ${input.reference.name}` }
+    return { rung: 3, confidence: 'self_reported', reason: `named a reference: ${input.reference.name}, not yet confirmed` }
   }
 
   // 2 — started something. Any non-job activity they actually began.
   if (applied.some((e) => !isJob(e))) {
-    return { rung: 2, confidence: 'confirmed', reason: 'started a program, volunteer role, or competition' }
+    return { rung: 2, confidence: 'self_reported', reason: 'started a program, volunteer role, or competition' }
   }
 
   // 1 — eligible. Papers in hand, or old enough not to need them.
   if (input.hasWorkingPapers === true) {
-    return { rung: 1, confidence: 'confirmed', reason: 'working papers on file' }
+    return { rung: 1, confidence: 'self_reported', reason: 'says they have working papers' }
   }
   if (input.age !== null && input.age >= 18) {
-    return { rung: 1, confidence: 'confirmed', reason: '18 or older, no working papers required in NJ' }
+    return { rung: 1, confidence: 'self_reported', reason: '18 or older, no working papers required in NJ' }
   }
 
   // 0 — not eligible yet. If we have never asked about papers, this is a guess.
   return {
     rung: 0,
-    confidence: input.hasWorkingPapers === null ? 'soft' : 'confirmed',
+    confidence: 'self_reported',
     reason: input.hasWorkingPapers === null ? 'working papers status unknown' : 'no working papers yet',
   }
 }

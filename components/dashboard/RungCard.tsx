@@ -56,7 +56,7 @@ export function RungCard({ onNavigate, onRung }: Props) {
       const [{ data: profile }, { data: apps }] = await Promise.all([
         supabase
           .from('users')
-          .select('age, has_working_papers, reference_name, reference_role, reference_org')
+          .select('age, has_working_papers, reference_name, reference_role, reference_org, reference_confirmed_at')
           .eq('id', user.id)
           .single(),
         supabase
@@ -91,6 +91,9 @@ export function RungCard({ onNavigate, onRung }: Props) {
               name: profile.reference_name as string,
               role: (profile.reference_role as string) ?? '',
               org: (profile.reference_org as string) ?? undefined,
+              // The only field on this whole ladder that somebody other than
+              // the teen put there. Drives rung 7 and confidence 'verified'.
+              confirmedAt: (profile.reference_confirmed_at as string | null) ?? null,
             }
           : null,
       })

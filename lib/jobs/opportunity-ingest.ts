@@ -147,7 +147,15 @@ export function toJobRow(o: OpportunitySource, month: number) {
     customer_interaction_level: 40,
 
     tags: o.tags,
-    status: inSeason(o, month) ? 'active' : 'inactive',
+    // status means ALIVE, never "in season".
+    //
+    // This used to be `inSeason(o, month) ? 'active' : 'inactive'`, and the
+    // jobs RLS policy is `USING (status = 'active')`. So an out-of-season
+    // entry became unreadable by clients altogether and the Extracurriculars
+    // page rendered "0 open now" against a table holding all 31 rows.
+    // Seasonality is active_months now. See add_active_months.sql.
+    status: 'active',
+    active_months: o.activeMonths ?? [],
     is_active: inSeason(o, month),
     verification_status: 'verified',
     verified_at: new Date().toISOString(),

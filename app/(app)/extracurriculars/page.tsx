@@ -22,7 +22,6 @@ import { createClient } from '@/lib/supabase/client'
 import { OpportunityCard } from '@/components/feed/OpportunityCard'
 import { OpportunitySheet } from '@/components/feed/OpportunitySheet'
 import { buildCalendar, groupByOpeningMonth } from '@/lib/opportunity-calendar'
-import { OPPORTUNITY_SOURCES } from '@/lib/jobs/opportunity-sources'
 import type { FeedItem } from '@/lib/feed-filters'
 
 type Cat = 'all' | 'competition' | 'program' | 'volunteer' | 'internship' | 'org_role'
@@ -69,11 +68,13 @@ export default function ExtracurricularsPage() {
         const g = parseInt(String(p?.school_grade ?? ''), 10)
         if (!Number.isNaN(g)) setGrade(g)
       }
-      // Both statuses: 'inactive' here means out of season, not dead, and the
-      // whole point of this page is showing what is coming.
+      // Only 'active'. Asking for 'inactive' as well was the bug that emptied
+      // this page: the jobs RLS policy is `USING (status = 'active')`, so
+      // those rows are unreadable by a client no matter what we request.
+      // Out-of-season entries are ACTIVE now and carry active_months instead.
       const { data } = await supabase
         .from('jobs').select('*').eq('source', 'opportunity')
-        .in('status', ['active', 'inactive']).limit(300)
+        .eq('status', 'active').limit(300)
       setItems((data ?? []) as unknown as FeedItem[])
     } catch { /* empty state renders */ }
     setLoading(false)
@@ -99,34 +100,44 @@ export default function ExtracurricularsPage() {
   }), [items, cat, freeOnly, grade])
 
   /**
-   * The twelve-month view is built from the SEED, not the database.
+   * The calendar reads the DATABASE now.
    *
-   * `activeMonths` deliberately has no column — see add_window_note.sql. The
-   * database stores prose ("opens around May") because organisers publish
-   * confidently wrong dates; the month arrays that drive the calendar live in
-   * lib/jobs/opportunity-sources.ts, which is the source of truth for
-   * recurrence. So the cards come from Supabase and the calendar comes from
-   * the seed, and they are joined on slug.
+   * It used to read lib/jobs/opportunity-sources.ts directly, because
+   * activeMonths had no column. That split is exactly what hid this bug: the
+   * cards said "0 open now" while the calendar underneath cheerfully listed
+   * 22, because the two halves of one page were reading different sources of
+   * truth. add_active_months.sql closed the gap. One source, one answer.
    */
-  const monthGroups = useMemo(() => {
-    const eligible = OPPORTUNITY_SOURCES.filter((s) => {
-      if (cat !== 'all' && s.kind !== cat) return false
-      if (grade !== null) {
-        if (typeof s.min_grade === 'number' && grade < s.min_grade) return false
-        if (typeof s.max_grade === 'number' && grade > s.max_grade) return false
-      }
-      return true
-    })
-    const built = buildCalendar(eligible.map((s) => ({
-      slug: s.slug, title: s.title, org: s.org,
-      activeMonths: s.activeMonths ?? [],
-      windowNote: s.windowNote, kind: s.kind, tags: s.tags,
-    })), month)
-    return groupByOpeningMonth(built, month)
-  }, [cat, grade, month])
+  const monthGroups = useMemo(() => groupByOpeningMonth(
+    buildCalendar(filtered.map((i) => ({
+      slug: String(i.id),
+      title: String(i.title),
+      org: String(i.company),
+      activeMonths: (i.active_months as number[] | null) ?? [],
+      windowNote: String(i.window_note ?? ''),
+      kind: String(i.kind ?? 'program'),
+      tags: (i.tags as string[]) ?? [],
+    })), month),
+    month,
+  ), [filtered, month])
 
-  const open = filtered.filter((i) => i.status === 'active')
-  const upcoming = filtered.filter((i) => i.status !== 'active')
+  /**
+   * Open vs upcoming is a SEASON question, not a status question.
+   *
+   * status now means "this row is alive"; active_months means "you can apply
+   * this month". Conflating them is what made every out-of-season entry
+   * invisible rather than merely closed. A null/empty array means no seasonal
+   * window at all, which is open — and being wrong in that direction shows an
+   * entry rather than hiding it, which is the safe way round.
+   */
+  const inSeasonNow = useCallback((i: FeedItem) => {
+    const months = i.active_months as number[] | null | undefined
+    if (!months || months.length === 0) return true
+    return months.includes(month)
+  }, [month])
+
+  const open = filtered.filter(inSeasonNow)
+  const upcoming = filtered.filter((i) => !inSeasonNow(i))
 
   // Anything with a genuine dated deadline inside 60 days.
   const closingSoon = useMemo(() => open
@@ -268,7 +279,7 @@ export default function ExtracurricularsPage() {
           </div>
           <div className="flex flex-col gap-2.5">
             {upcoming.map((i, n) => (
-              <OpportunityCard key={i.id} item={i} hasPapers={hasPapers === true} index={n} onOpen={setOpen_} />
+              <OpportunityCard key={i.id} item={i} hasPapers={hasPapers === true} index={n} onOpen={setOpen_} upcoming />
             ))}
           </div>
         </section>

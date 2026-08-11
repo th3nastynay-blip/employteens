@@ -42,11 +42,16 @@ interface Props {
   hasPapers?: boolean
   index?: number
   onOpen?: (item: FeedItem) => void
+  /**
+   * Out of season. Passed in rather than read off item.status, because status
+   * now means "this row is alive" and says nothing about whether the window
+   * is open. See add_active_months.sql.
+   */
+  upcoming?: boolean
 }
 
-export function OpportunityCard({ item, hasPapers, index = 0, onOpen }: Props) {
+export function OpportunityCard({ item, hasPapers, index = 0, onOpen, upcoming = false }: Props) {
   const cost = costLabel(item)
-  const upcoming = item.status !== 'active'
   const evidence = EVIDENCE_COPY[String(item.evidence_kind ?? '')] ?? null
 
   return (

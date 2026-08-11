@@ -3,7 +3,13 @@
 /**
  * EMPLOYTEENS — organisation tile
  *
- * THREE ATTEMPTS AT THIRD-PARTY LOGOS, AND WHAT FINALLY WORKED
+ * SIX ATTEMPTS AT THIRD-PARTY LOGOS. See lib/jobs/brands.ts for what each
+ * service actually does when tested from our own origin — the short version is
+ * that Google fabricates logos, Clearbit blocks referred requests, and
+ * unavatar works. Everything below assumes that, and it was measured rather
+ * than reasoned about.
+ *
+ * ORIGINAL NOTES
  *
  *   1. Favicon from the APPLY url → Google Forms' globe on BGIC, Workday's on
  *      Sloan Kettering, because the apply link points at a form host.
@@ -120,10 +126,12 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
           // placeholder.
           onError={() => setIdx((i) => i + 1)}
           onLoad={(e) => {
-            // Belt and braces: anything decoding under 32px is a placeholder,
-            // whatever served it.
+            // Real logos come back anywhere from 16px to 600px depending on
+            // what the site publishes. Under 24 is too soft to render at 44,
+            // so those fall through to the brand tile — michaels.com serves a
+            // 16px favicon and looks like mush blown up. 32px is acceptable.
             const img = e.currentTarget
-            if (img.naturalWidth > 0 && img.naturalWidth < 32) setIdx((i) => i + 1)
+            if (img.naturalWidth > 0 && img.naturalWidth < 24) setIdx((i) => i + 1)
           }}
           style={{
             width: '100%',

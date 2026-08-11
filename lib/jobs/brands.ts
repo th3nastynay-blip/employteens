@@ -122,33 +122,36 @@ export function brandFor(company: string | null | undefined): Brand | null {
 }
 
 /**
- * Logo sources, in order, for a verified domain.
+ * Logo sources, in order. VERIFIED FROM THE LIVE APP ORIGIN, not assumed.
  *
- * GOOGLE IS GONE. `google.com/s2/favicons` does not 404 when it has no icon —
- * it GENERATES a coloured letter tile and serves it with HTTP 200. That is
- * what put a green "L" on Insomnia Cookies and it is undetectable from the
- * client: a fabricated logo and a real one look identical to onError, to the
- * status code, and (at 128px) to a size check. Four attempts died on this.
+ * I tested every one of these by loading them from employteensfinal.vercel.app
+ * in a real browser, because the previous five attempts were all reasoning
+ * about services I could not reach from the build sandbox.
  *
- * Both sources below return a real 404 when they have nothing, which is the
- * only property that matters — it makes onError meaningful, so the chain can
- * fall through deterministically to the brand-colour tile.
+ * Results:
  *
- *   1. Clearbit Logo API — actual brand marks, transparent PNG, built for
- *      exactly this. Best quality for chains.
- *   2. unavatar.io with fallback=false — aggregates several sources; the flag
- *      is what forces a 404 instead of a generated placeholder.
- *   3. (handled in OrgLogo) the employer's initial on the employer's colour.
+ *   google.com/s2/favicons  — DOES NOT 404. Generates a coloured letter tile
+ *     and serves it 200, so a fabricated logo is indistinguishable from a real
+ *     one. This produced the green "L" on Insomnia Cookies. Never use it.
+ *
+ *   logo.clearbit.com — works when you navigate to the URL directly, FAILS
+ *     for every domain when requested from our own page. It blocks referred
+ *     requests. That is why it looked correct in isolation and never once
+ *     appeared in the feed. Removed.
+ *
+ *   unavatar.io?fallback=false — 15 of 15 test domains returned a real image
+ *     from our origin. This is the one that actually works.
+ *
+ * Sizes vary a lot (16px for michaels.com, 600px for cvs.com) because these
+ * are whatever icon the site publishes. OrgLogo drops anything under 24px to
+ * the brand tile rather than rendering a blurry 16px square at 44px.
  */
-export function logoSources(brand: Brand, size = 128): string[] {
+export function logoSources(brand: Brand, _size = 128): string[] {
   return [
-    // LOCAL FIRST. This is the only source that cannot fail, cannot be rate
-    // limited, cannot be blocked, and cannot invent an image. Drop a file in
-    // /public/logos and that employer is right permanently.
+    // Local file wins if present — no network, cannot break.
     `/logos/${brand.slug}.png`,
     `/logos/${brand.slug}.svg`,
-    // Then the network, best-effort. Both 404 honestly, unlike Google.
-    `https://logo.clearbit.com/${brand.domain}?size=${size}`,
+    // The only remote source confirmed to work from our origin.
     `https://unavatar.io/${brand.domain}?fallback=false`,
   ]
 }

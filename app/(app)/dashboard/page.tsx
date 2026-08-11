@@ -58,6 +58,13 @@ export default function DashboardPage() {
   const [totalCount, setTotalCount] = useState(0)
   // Held so FeedSection can compute per-teen fit factors on the client.
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  /**
+   * True when the teen is younger than essentially all of our job inventory.
+   * Distinct from "no results": one is our supply, the other is their filters,
+   * and telling them apart is the difference between a useful message and a
+   * lie.
+   */
+  const underAgeForFeed = userAge !== null && userAge < 16
 
   useEffect(() => {
     // Animate scan text while data loads
@@ -378,15 +385,30 @@ export default function DashboardPage() {
                 savedJobs={savedJobs}
                 onSave={handleSave}
                 profile={profile}
+                /* THE EMPTY STATE HAS TO TELL THE TRUTH.
+                   This said "No jobs in the database yet — check back soon as
+                   we load new listings daily" while the database held 293
+                   active, 222 verified that morning. A 14-year-old was reading
+                   "we have nothing" when the real situation is "we have plenty
+                   and none of it is open to you yet" — which is a completely
+                   different problem with a completely different next step.
+
+                   Under-16 is not an error state, it is the market. NJ and NY
+                   chains overwhelmingly start at 16, so the honest move is to
+                   say so and point at the things that DO accept 14 and 15 year
+                   olds, which is exactly what Explore is full of. */
                 emptyState={
-                  activeTab === 'best_matches'
+                  underAgeForFeed
+                    ? `We have ${totalCount || 'hundreds of'} verified jobs, and almost every employer on them starts hiring at 16. That is the market, not your profile. Volunteer roles, programmes and competitions do take you now — they are in Explore, and they build the record that makes 16 easy.`
+                    : activeTab === 'best_matches'
                     ? totalCount === 0
-                      ? 'No jobs in the database yet — check back soon as we load new listings daily.'
+                      ? 'Nothing matched your schedule and travel yet. Widening either one in your profile usually opens things up.'
                       : 'No strong matches yet. Try expanding your availability or transportation options.'
                     : activeTab === 'new_near_you'
                     ? 'No nearby jobs right now. We add new listings every day.'
                     : 'No fast-hiring employers matching your profile right now.'
                 }
+                emptyAction={underAgeForFeed ? { label: 'Open Explore', href: '/extracurriculars' } : undefined}
               />
             )}
           </motion.div>

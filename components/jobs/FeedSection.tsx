@@ -12,6 +12,8 @@ interface FeedSectionProps {
   savedJobs: string[]
   onSave: (id: string) => void
   emptyState?: string
+  /** Somewhere to actually go, when the empty state has a real next step. */
+  emptyAction?: { label: string; href: string }
   /**
    * Needed to compute fit factors, which are per-teen by definition. Without
    * it the cards render with no fit ring rather than falling back to a
@@ -20,7 +22,7 @@ interface FeedSectionProps {
   profile?: UserProfile | null
 }
 
-export function FeedSection({ jobs, savedJobs, onSave, emptyState, profile }: FeedSectionProps) {
+export function FeedSection({ jobs, savedJobs, onSave, emptyState, emptyAction, profile }: FeedSectionProps) {
   const [open, setOpen] = useState<JobMatch | null>(null)
   const openFit = open && profile ? fitFactors(profile, open as unknown as JobRow) : undefined
   if (jobs.length === 0) {
@@ -39,9 +41,24 @@ export function FeedSection({ jobs, savedJobs, onSave, emptyState, profile }: Fe
         >
           🔍
         </div>
-        <p style={{ fontSize: '14px', color: 'var(--et-muted)', lineHeight: 1.5 }}>
+        <p style={{ fontSize: '14px', color: 'var(--et-muted)', lineHeight: 1.55, maxWidth: 340 }}>
           {emptyState ?? 'Scanning for matches in your area…'}
         </p>
+        {emptyAction && (
+          <a
+            href={emptyAction.href}
+            className="press"
+            style={{
+              marginTop: 4, height: 44, padding: '0 20px', borderRadius: 13,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(135deg, var(--et-match-from), var(--et-match-to))',
+              color: '#fff', fontFamily: 'var(--font-display)', fontWeight: 700,
+              fontSize: '14.5px', textDecoration: 'none',
+            }}
+          >
+            {emptyAction.label}
+          </a>
+        )}
       </div>
     )
   }

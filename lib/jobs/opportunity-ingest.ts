@@ -65,7 +65,7 @@ function isFormHost(host: string): boolean {
  * where most entries fell back, that was the whole difference between a
  * designed page and a broken one.
  */
-export function logoForUrl(applyUrl: string, homepage?: string, size = 128): string | null {
+export function logoForUrl(applyUrl: string, homepage?: string, _size = 128): string | null {
   let domain: string | null = null
   if (homepage) {
     domain = homepage.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
@@ -78,7 +78,13 @@ export function logoForUrl(applyUrl: string, homepage?: string, size = 128): str
     }
   }
   if (!domain) return null
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`
+
+  // unavatar, NOT Google. google.com/s2/favicons answers 200 with a
+  // FABRICATED letter tile when it has no icon, which is undetectable from
+  // the client and is what put a green "L" on Insomnia Cookies. It is banned
+  // from this codebase. unavatar 404s honestly, so a miss reaches OrgLogo as
+  // a real error and falls through to the designed tile.
+  return `https://unavatar.io/${domain}?fallback=false`
 }
 
 /** Is this entry's application window open in the given month? */

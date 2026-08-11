@@ -112,12 +112,32 @@ const JUNK_PATTERNS: RegExp[] = [
   /\[(?:[^\]]*)\]/g,                       // any bracketed
 ]
 
+/**
+ * Acronyms that must survive title-casing. `.toLowerCase()` on the whole
+ * string turned "GM and Food" into "Gm and Food" on a live card — a two-letter
+ * word that is not a word, rendered as if it were a name.
+ */
+const ACRONYMS = new Set([
+  'gm', 'it', 'hr', 'qa', 'ap', 'ar', 'cs', 'pt', 'ft', 'po', 'rn', 'lpn',
+  'cdl', 'pos', 'suv', 'usa', 'nyc', 'nj', 'ny', 'bmw', 'kfc', 'amc', 'ups',
+  'tsa', 'dmv', 'ymca', 'nasa', 'faa', 'stem', 'sat', 'act', 'ap',
+])
+
 function titleCase(s: string): string {
   const minor = new Set(['of', 'and', 'the', 'for', 'to', 'in', 'at', 'a', 'an'])
   return s
-    .toLowerCase()
     .split(/\s+/)
-    .map((w, i) => (i > 0 && minor.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .map((word, i) => {
+      const lower = word.toLowerCase()
+      // Preserve acronyms whatever case they arrived in.
+      if (ACRONYMS.has(lower)) return lower.toUpperCase()
+      // Preserve anything already written as a short all-caps token, which is
+      // almost always an initialism we simply have not listed yet. Guarded to
+      // 2-4 chars so a SHOUTED WORD is still normalised.
+      if (/^[A-Z0-9]{2,4}$/.test(word)) return word
+      if (i > 0 && minor.has(lower)) return lower
+      return lower.charAt(0).toUpperCase() + lower.slice(1)
+    })
     .join(' ')
 }
 

@@ -1,48 +1,49 @@
 'use client'
 
 /**
- * EMPLOYTEENS — organisation logo, with a fallback that looks designed
+ * EMPLOYTEENS — organisation tile
  *
- * Every EC card was rendering the same grey globe. Two causes: the logo was
- * resolved from the APPLY url (so form hosts won), and when nothing resolved
- * we shipped Google's placeholder globe rather than admitting it.
+ * WHY THERE IS NO LOGO-GUESSING ANY MORE
  *
- * A placeholder that repeats across a whole list is worse than no image — it
- * reads as unfinished. So the fallback is a monogram in ONE quiet treatment,
- * inside the same tile a real logo would occupy.
+ * Three attempts at third-party logos, three different failures:
  *
- * The favicon route also fails LOUDLY now. Google's service returns HTTP 200
- * with a globe rather than a 404, so `onError` never fires and we cannot
- * detect a miss from the response. Instead we check the decoded image: their
- * placeholder comes back at 16px regardless of the requested size, so a
- * naturalWidth under 32 on a request for 128 means we got the globe, and we
- * swap to the monogram.
+ *   1. Favicon from the APPLY url → Google Forms' globe on BGIC, Workday's on
+ *      Sloan Kettering, because the apply link points at a form host.
+ *   2. Favicon from the ORG's domain → still a grey globe for anything without
+ *      one, repeated down the whole list.
+ *   3. Favicon from a GUESSED domain → the worst of the three. Google's icon
+ *      service does not 404 when it has nothing; it GENERATES a coloured
+ *      letter tile. Those come back at full size, so the "is it the 16px
+ *      globe" check waves them straight through. The feed rendered a green
+ *      "L" on Insomnia Cookies — a logo Google invented — while Target, whose
+ *      domain is obviously right, fell back to a monogram.
+ *
+ * That is not a tuning problem. A service that fabricates a plausible-looking
+ * logo cannot be told apart from one that found a real one, so every card
+ * becomes a coin flip and the list can never look consistent.
+ *
+ * So: we render a real logo ONLY when someone deliberately supplied one
+ * (`src`), which today means the 31 curated opportunities where the org's own
+ * domain was checked by hand. Everything else gets the same designed tile.
+ * Uniform by construction rather than by luck, no third-party request per
+ * card, nothing invented.
+ *
+ * If real employer logos are wanted later, the honest route is local assets
+ * for the ~20 chains that dominate this market — checked in, checked once,
+ * never guessed.
  */
 
 import { useState } from 'react'
-import { domainForCompany } from '@/lib/jobs/company-domain'
 
 /**
- * ONE monogram treatment, not six.
- *
- * This used to pick from six gradients by name hash, on the theory that a
- * consistent colour per org helps recognition. In a feed where NOTHING has a
- * real logo — job rows have never had logo_url populated — that produced forty
- * randomly coloured tiles in a column, which reads as broken rather than as a
- * system. The colour was carrying no information; it was just noise with a
- * stable seed.
- *
- * A single quiet treatment lets the real logos be the thing that varies, which
- * is the only variation that means anything.
- */
-
-/**
- * Initials from the org name. Two letters max, and stop-words are dropped so
- * "The Great Sunflower Project" reads GS rather than TG.
+ * Initials. Two letters max, stop-words dropped so "The Great Sunflower
+ * Project" reads GS rather than TG, and franchise noise trimmed so
+ * "Chipotle - Journal Square" reads C rather than CJ.
  */
 function initialsOf(name: string): string {
   const stop = new Set(['the', 'of', 'and', 'for', 'a', 'an', 'at', 'in', 'de'])
-  const words = name
+  const head = String(name ?? '').split(/\s+[-–—|]\s+|,|\s#/)[0]
+  const words = head
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter((w) => w.length > 0 && !stop.has(w.toLowerCase()))
@@ -52,6 +53,10 @@ function initialsOf(name: string): string {
 }
 
 interface Props {
+  /**
+   * A logo we actually hold. Null for every job row — see the header. Do NOT
+   * add guessing here; that is the bug this file exists to close.
+   */
   src?: string | null
   name: string
   size?: number
@@ -60,17 +65,7 @@ interface Props {
 
 export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
   const [failed, setFailed] = useState(false)
-
-  // Fall back to deriving a domain from the company name. Job rows have no
-  // logo_url — the opportunity ingest sets it, the job pipeline never did — so
-  // without this every job card is a monogram. A wrong guess degrades to the
-  // monogram via the 32px check below, never to another company's logo.
-  const resolved = src ?? (() => {
-    const domain = domainForCompany(name)
-    return domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : null
-  })()
-
-  const showImage = Boolean(resolved) && !failed
+  const showImage = Boolean(src) && !failed
   const initials = initialsOf(name)
 
   return (
@@ -82,10 +77,8 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
         flexShrink: 0,
         overflow: 'hidden',
         position: 'relative',
-        // Identical container whether or not a logo resolved. Mixed real
-        // logos and monograms only look deliberate if the TILE is constant and
-        // the contents vary, rather than the other way round.
-        background: 'var(--et-surface)',
+        // Constant tile. The contents may vary; the container never does.
+        background: 'var(--et-surface-2)',
         border: '1px solid var(--et-border)',
         display: 'flex',
         alignItems: 'center',
@@ -96,15 +89,14 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={resolved as string}
+          src={src as string}
           alt=""
           width={size}
           height={size}
           loading="lazy"
           onError={() => setFailed(true)}
           onLoad={(e) => {
-            // Google returns 200 + a 16px globe when it has nothing. Requesting
-            // 128 and receiving 16 is the only reliable tell.
+            // Backstop for the placeholder-globe case on curated rows.
             const img = e.currentTarget
             if (img.naturalWidth > 0 && img.naturalWidth < 32) setFailed(true)
           }}
@@ -113,16 +105,17 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
             height: '100%',
             objectFit: 'contain',
             padding: size > 40 ? 8 : 5,
+            background: 'var(--et-surface)',
           }}
         />
       ) : (
         <span
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: Math.round(size * 0.36),
+            fontSize: Math.round(size * 0.34),
             fontWeight: 800,
-            color: 'var(--et-placeholder)',
-            letterSpacing: '-0.02em',
+            color: 'var(--et-muted)',
+            letterSpacing: '0.01em',
             lineHeight: 1,
           }}
         >

@@ -38,6 +38,12 @@ const RUNG_ROUTES: Record<NextAction['target'], string> = {
 export default function DashboardPage() {
   const router = useRouter()
   const [rung, setRung] = useState<Rung | null>(null)
+  const [hasPapers, setHasPapers] = useState<boolean | null>(null)
+  // Bumped when the teen says they have their papers, to remount RungCard so
+  // the ladder re-derives immediately. Saying "I have them" and watching the
+  // rung sit at 0 until a refresh would look exactly like the bug where the
+  // column did not exist.
+  const [ladderVersion, setLadderVersion] = useState(0)
   const [userName, setUserName] = useState('')
   const [userAge, setUserAge] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<FeedTab>('best_matches')
@@ -84,6 +90,7 @@ export default function DashboardPage() {
     if (profileRes.data?.age) {
       setUserAge(profileRes.data.age)
     }
+    setHasPapers((profileRes.data?.has_working_papers as boolean | null) ?? null)
 
     if (applicationsRes.data) {
       setSavedJobs(applicationsRes.data.map((a: { job_id: string }) => a.job_id))
@@ -279,6 +286,7 @@ export default function DashboardPage() {
       {!isLoading && (
         <div className="px-5">
           <RungCard
+            key={ladderVersion}
             onNavigate={(a) => router.push(RUNG_ROUTES[a.target])}
             onRung={setRung}
           />
@@ -292,7 +300,14 @@ export default function DashboardPage() {
           on rung it serves the actual need: anyone at rungs 0–2 has nothing on
           their record yet, whether they're 14 or 17. */}
       {!isLoading && rung !== null && rung <= 2 && userAge !== null && (
-        <GetReadyMode age={userAge} />
+        <GetReadyMode
+          age={userAge}
+          hasPapers={hasPapers}
+          // Remount RungCard so the ladder re-derives immediately. Saying "I
+          // have my papers" and watching the rung stay at 0 until a refresh
+          // would look exactly like the bug we just spent an hour on.
+          onPapers={() => { setHasPapers(true); setLadderVersion((v: number) => v + 1) }}
+        />
       )}
 
       {/* ── Tab bar ── */}

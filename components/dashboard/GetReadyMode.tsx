@@ -16,13 +16,21 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { GIG_GUIDES, getProgramCalendar, WORKING_PAPERS_PROMPT } from '@/lib/get-ready'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
-export function GetReadyMode({ age }: { age: number }) {
+export function GetReadyMode({ age, hasPapers, onPapers }: {
+  age: number
+  /** null = never asked. Distinct from false. */
+  hasPapers?: boolean | null
+  onPapers?: () => void
+}) {
   const router = useRouter()
   const [unlockCount, setUnlockCount] = useState<number | null>(null)
+  const [savingPapers, setSavingPapers] = useState(false)
+  const [gotPapers, setGotPapers] = useState<boolean>(hasPapers === true)
   const programs = getProgramCalendar()
   const currentMonth = new Date().getMonth() + 1
 
@@ -35,6 +43,33 @@ export function GetReadyMode({ age }: { age: number }) {
 
   function askCoach(prompt: string) {
     router.push(`/career?ask=${encodeURIComponent(prompt)}`)
+  }
+
+  /**
+   * THE MISSING WRITE.
+   *
+   * has_working_papers is read in four places — this card, the unified feed,
+   * the Extracurriculars page and the rung detector — and until now NOTHING
+   * in the app ever set it. Not one of the thirteen onboarding steps asks, and
+   * this card explained how to GET papers without ever offering a way to say
+   * you had them. So the column stayed null for every user and rung 0 was a
+   * dead end by construction: the ladder could be read but never climbed.
+   */
+  async function markPapers() {
+    setSavingPapers(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('users').update({
+          has_working_papers: true,
+          working_papers_at: new Date().toISOString().slice(0, 10),
+        }).eq('id', user.id)
+        setGotPapers(true)
+        onPapers?.()
+      }
+    } catch { /* button stays up so they can retry */ }
+    setSavingPapers(false)
   }
 
   return (
@@ -134,6 +169,39 @@ export function GetReadyMode({ age }: { age: number }) {
         </div>
         <span style={{ fontSize: '13px', color: 'var(--et-blue)', fontWeight: 600 }}>→</span>
       </motion.button>
+
+      {/* Self-reported, and labelled as such everywhere downstream — we never
+          see the certificate. Still worth asking, because "do you have them"
+          is the single question that decides whether anything else we show is
+          actionable. */}
+      {!gotPapers ? (
+        <button
+          onClick={markPapers}
+          disabled={savingPapers}
+          className="press"
+          style={{
+            width: '100%', height: 46, borderRadius: 13,
+            background: 'var(--et-surface)', border: '1.5px solid var(--et-border-mid)',
+            color: 'var(--et-subtle)', fontFamily: 'var(--font-display)',
+            fontWeight: 700, fontSize: '14px', cursor: 'pointer',
+            opacity: savingPapers ? 0.6 : 1,
+          }}
+        >
+          {savingPapers ? 'Saving…' : 'I already have my working papers'}
+        </button>
+      ) : (
+        <div
+          className="card px-4 py-3.5 flex items-center gap-2.5"
+          style={{ background: 'var(--et-green-light)', border: 'none' }}
+        >
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3.5 8.5L6.5 11.5L12.5 4.5" stroke="var(--et-green)" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--et-green)' }}>
+            Working papers on file — you can apply to anything you are old enough for
+          </p>
+        </div>
+      )}
 
       {/* ── Unlock counter ── */}
       {unlockCount !== null && (

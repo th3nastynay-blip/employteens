@@ -148,18 +148,18 @@ export function brandFor(company: string | null | undefined): Brand | null {
  */
 export function logoSources(brand: Brand, _size = 128): string[] {
   const local = LOCAL_LOGOS[brand.slug]
-  return [
-    // A file we actually hold. LOCAL_LOGOS is an explicit manifest rather than
-    // a guessed extension list: saving from unavatar produces png, webp AND
-    // ico depending on what the site publishes, and probing four extensions
-    // per card meant three guaranteed 404s before the hit.
-    // ?v= busts NEGATIVE cache. These paths 404'd for most of today, and a
-    // browser that cached "/logos/target.png = 404" keeps honouring it after
-    // the file lands. Bump LOGO_VERSION whenever files are added.
-    ...(local ? [`/logos/${brand.slug}.${local}?v=${LOGO_VERSION}`] : []),
-    // Confirmed working from our own origin. See the note above.
-    `https://unavatar.io/${brand.domain}?fallback=false`,
-  ]
+
+  // A FILE WE HOLD IS THE ONLY SOURCE. No chain, no fallback, no size check.
+  //
+  // The chain was the bug. Every extra candidate is another onError that can
+  // advance the index, and any one of them misfiring lands on the tile — which
+  // is exactly what kept happening. When the file is in the repo there is
+  // nothing to fall back FROM: it is deployed with the app, same origin, same
+  // cache lifetime, and it either exists or the build is broken.
+  if (local) return [`/logos/${brand.slug}.${local}?v=${LOGO_VERSION}`]
+
+  // Only brands with no file of their own reach the network.
+  return [`https://unavatar.io/${brand.domain}?fallback=false`]
 }
 
 /** Bump when logo files change, to defeat cached 404s. */

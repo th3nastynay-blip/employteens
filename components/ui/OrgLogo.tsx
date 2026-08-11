@@ -87,6 +87,7 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
   const [idx, setIdx] = useState(0)
 
   const resolved = idx < sources.length ? sources[idx] : null
+  const isLocal = typeof resolved === 'string' && resolved.startsWith('/logos/')
   const showImage = Boolean(resolved)
   const initials = initialsOf(name)
 
@@ -126,10 +127,10 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
           // placeholder.
           onError={() => setIdx((i) => i + 1)}
           onLoad={(e) => {
-            // Real logos come back anywhere from 16px to 600px depending on
-            // what the site publishes. Under 24 is too soft to render at 44,
-            // so those fall through to the brand tile — michaels.com serves a
-            // 16px favicon and looks like mush blown up. 32px is acceptable.
+            // Size check applies to NETWORK sources only. A file in our own
+            // repo was put there deliberately; second-guessing it at runtime
+            // is how a perfectly good 32px logo ended up as a letter tile.
+            if (isLocal) return
             const img = e.currentTarget
             if (img.naturalWidth > 0 && img.naturalWidth < 24) setIdx((i) => i + 1)
           }}

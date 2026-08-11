@@ -369,7 +369,12 @@ export default function ExtracurricularsPage() {
         </div>
       )}
 
-      <OpportunitySheet item={open_} hasPapers={hasPapers === true} onClose={() => setOpen_(null)} />
+      <OpportunitySheet
+        item={open_}
+        hasPapers={hasPapers === true}
+        upcoming={open_ ? !inSeasonNow(open_) : false}
+        onClose={() => setOpen_(null)}
+      />
     </div>
   )
 }

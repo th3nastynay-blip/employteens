@@ -49,10 +49,12 @@ function costLine(item: FeedItem): { text: string; muted: boolean } {
 interface Props {
   item: FeedItem | null
   hasPapers?: boolean
+  /** Out of season. Same reasoning as OpportunityCard — status is liveness. */
+  upcoming?: boolean
   onClose: () => void
 }
 
-export function OpportunitySheet({ item, hasPapers, onClose }: Props) {
+export function OpportunitySheet({ item, hasPapers, upcoming = false, onClose }: Props) {
   // Lock the page behind the sheet. Without this, a scroll gesture that runs
   // past the end of the sheet scrolls the list underneath it, which on a phone
   // feels like the app lost track of what you were looking at.
@@ -128,9 +130,9 @@ export function OpportunitySheet({ item, hasPapers, onClose }: Props) {
 
               {/* ── Status strip ── */}
               <div className="flex flex-wrap gap-1.5" style={{ marginTop: 14 }}>
-                <span className={`pill ${item.status === 'active' ? 'pill-green' : 'pill-amber'}`}>
-                  <span className={`status-dot ${item.status === 'active' ? 'status-open' : 'status-upcoming'}`} style={{ marginRight: 0 }} />
-                  {item.status === 'active' ? 'Open now' : 'Not open yet'}
+                <span className={`pill ${upcoming ? 'pill-amber' : 'pill-green'}`}>
+                  <span className={`status-dot ${upcoming ? 'status-upcoming' : 'status-open'}`} style={{ marginRight: 0 }} />
+                  {upcoming ? 'Not open yet' : 'Open now'}
                 </span>
                 <span className="pill">{isVirtual(item) ? 'Virtual' : String(item.location ?? 'In person')}</span>
                 <span className={`pill ${cost!.muted ? 'pill-muted' : cost!.text === 'Free' ? 'pill-green' : ''}`}>
@@ -233,7 +235,7 @@ export function OpportunitySheet({ item, hasPapers, onClose }: Props) {
                   boxShadow: '0 4px 14px rgba(37,99,235,0.28)',
                 }}
               >
-                {item.status === 'active' ? 'Apply now' : 'See the details'}
+                {upcoming ? 'See the details' : 'Apply now'}
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M6 3h7v7M13 3L3.5 12.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

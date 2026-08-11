@@ -17,6 +17,7 @@
  */
 
 import { motion } from 'framer-motion'
+import { OrgLogo } from '@/components/ui/OrgLogo'
 import { reasonLine, isVirtual, needsWorkingPapers, type FeedItem } from '@/lib/feed-filters'
 
 const EVIDENCE_COPY: Record<string, string> = {
@@ -68,38 +69,40 @@ export function OpportunityCard({ item, hasPapers, index = 0, onOpen }: Props) {
       }}
     >
       <div className="flex gap-3">
-        {item.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.logo_url as string}
-            alt=""
-            width={40}
-            height={40}
-            style={{ borderRadius: 10, flexShrink: 0, background: 'var(--et-ground)' }}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-              background: 'var(--et-ground)', display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              fontWeight: 800, color: 'var(--et-muted)',
-            }}
-          >
-            {String(item.company ?? '?').charAt(0)}
-          </div>
-        )}
+        <OrgLogo src={item.logo_url as string | null} name={String(item.company ?? '')} size={44} radius={12} />
 
         <div style={{ minWidth: 0, flex: 1 }}>
-          <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--et-ink)', lineHeight: 1.25, letterSpacing: '-0.01em' }}>
+          <h3
+            className="display"
+            style={{ fontSize: '15.5px', lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}
+          >
             {item.title}
           </h3>
-          <p style={{ fontSize: '12px', color: 'var(--et-muted)', marginTop: 1 }}>{item.company}</p>
+          <p style={{ fontSize: '12px', color: 'var(--et-muted)', marginTop: 2 }}>{item.company}</p>
         </div>
+
+        {/* Chevron. Without it nothing on the card said it was tappable, and
+            the whole page read as a static list. */}
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 4 }} aria-hidden="true">
+          <path d="M6 3.5L10.5 8L6 12.5" stroke="var(--et-placeholder)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </div>
 
-      <p style={{ fontSize: '12px', color: 'var(--et-subtle)', marginTop: 10, lineHeight: 1.4 }}>
+      {/* Two lines of the real description. These were written for all 31
+          entries and were never rendered anywhere — the card showed only a
+          generated reason line, so every entry read roughly the same. */}
+      {item.description && (
+        <p
+          style={{
+            fontSize: '12.5px', color: 'var(--et-subtle)', marginTop: 10, lineHeight: 1.45,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          } as React.CSSProperties}
+        >
+          {String(item.description)}
+        </p>
+      )}
+
+      <p style={{ fontSize: '12px', color: 'var(--et-muted)', marginTop: 8, lineHeight: 1.4 }}>
         {reasonLine(item, { hasPapers })}
       </p>
 

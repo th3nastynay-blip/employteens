@@ -81,15 +81,39 @@ export default function JobsTrackerPage() {
     type RawApp = { job_id: string; status: AppStatus; created_at: string; updated_at?: string; jobs: unknown }
     const rows = (data ?? []) as unknown as RawApp[]
 
+    // NEVER drop an application because its job did not come back.
+    //
+    // This filter used to be `.filter((a) => a.jobs && ...)`, which looked like
+    // harmless defensive coding and was actually how every account came to show
+    // zero applications. The jobs SELECT policy only returned status='active'
+    // rows, so the moment the trust audit flagged a listing the embed returned
+    // null and the teen's application silently vanished from their own tracker.
+    //
+    // fix_applied_job_visibility.sql is the real fix. This is the backstop: if
+    // a job is ever unreadable again, the application still shows, labelled.
+    // A row that says "listing removed" is recoverable. A row that disappears
+    // teaches a teen the app lost their work.
     setTracked(
-      rows
-        .filter((a) => a.jobs && typeof a.jobs === 'object')
-        .map((a) => ({
-          job: { ...(a.jobs as JobRow), match_score: 0, match_explanation: '' },
+      rows.map((a) => {
+        const job = (a.jobs && typeof a.jobs === 'object' ? a.jobs : null) as JobRow | null
+        return {
+          job: job
+            ? { ...job, match_score: 0, match_explanation: '' }
+            : {
+                id: a.job_id,
+                title: 'Listing no longer available',
+                company: 'We removed this listing after you applied',
+                location: '',
+                apply_url: '',
+                status: 'inactive',
+                match_score: 0,
+                match_explanation: '',
+              } as unknown as JobRow & { match_score: number; match_explanation: string },
           status: a.status,
           created_at: a.created_at,
           updated_at: a.updated_at,
-        })),
+        }
+      }),
     )
     setLoading(false)
   }, [])

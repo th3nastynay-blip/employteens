@@ -41,19 +41,44 @@ export interface OpportunityIngestResult {
 }
 
 /**
- * Logo from the apply URL's domain via Google's favicon service.
- *
- * No files to manage, no per-entry work, and it resolves for essentially any
- * organisation with a website. Returns a generic globe for domains without a
- * favicon, which is a better failure than a broken image.
+ * Hosts that run somebody else's form. Their favicon is never the logo we
+ * want, and resolving one is what put Google Forms' grey globe on the Boston
+ * Global Investment Competition card and Workday's on Sloan Kettering.
  */
-export function logoForUrl(applyUrl: string, size = 128): string | null {
-  try {
-    const host = new URL(applyUrl).hostname
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`
-  } catch {
-    return null
+const FORM_HOSTS = [
+  'forms.gle', 'docs.google.com', 'forms.office.com',
+  'submittable.com', 'wufoo.com', 'jotform.com', 'typeform.com',
+  'myworkdayjobs.com', 'givechances.org', 'signupgenius.com',
+  'eventbrite.com', 'airtable.com', 'surveymonkey.com',
+]
+
+function isFormHost(host: string): boolean {
+  return FORM_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))
+}
+
+/**
+ * Logo for an entry, preferring the organisation's OWN domain.
+ *
+ * Returns null rather than a grey globe when there is nothing good. Null is
+ * handled by <OrgLogo>, which draws a monogram. An intentional-looking initial
+ * beats a placeholder that reads as "we could not be bothered" — and on a list
+ * where most entries fell back, that was the whole difference between a
+ * designed page and a broken one.
+ */
+export function logoForUrl(applyUrl: string, homepage?: string, size = 128): string | null {
+  let domain: string | null = null
+  if (homepage) {
+    domain = homepage.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+  } else {
+    try {
+      const host = new URL(applyUrl).hostname
+      domain = isFormHost(host) ? null : host
+    } catch {
+      domain = null
+    }
   }
+  if (!domain) return null
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`
 }
 
 /** Is this entry's application window open in the given month? */
@@ -83,7 +108,7 @@ export function toJobRow(o: OpportunitySource, month: number) {
     apply_method: 'url',
     source: 'opportunity',
     description: o.description.slice(0, 800),
-    logo_url: logoForUrl(o.apply_url),
+    logo_url: logoForUrl(o.apply_url, o.homepage),
 
     kind: o.kind,
     is_paid: o.evidence_kind === 'income',

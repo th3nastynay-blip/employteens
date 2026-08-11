@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { OpportunityCard } from '@/components/feed/OpportunityCard'
+import { OpportunitySheet } from '@/components/feed/OpportunitySheet'
 import { buildCalendar, groupByOpeningMonth } from '@/lib/opportunity-calendar'
 import { OPPORTUNITY_SOURCES } from '@/lib/jobs/opportunity-sources'
 import type { FeedItem } from '@/lib/feed-filters'
@@ -42,6 +43,7 @@ export default function ExtracurricularsPage() {
   const [hasPapers, setHasPapers] = useState<boolean | null>(null)
   const [grade, setGrade] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [open_, setOpen_] = useState<FeedItem | null>(null)
 
   /**
    * Time is pinned once, on the client, after mount.
@@ -151,7 +153,7 @@ export default function ExtracurricularsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-full" style={{ paddingBottom: 32 }}>
+    <div className="flex flex-col min-h-full pb-nav">
 
       {/* ── Hero ── */}
       <div className="px-5 pt-safe-header pb-4 rise">
@@ -184,13 +186,23 @@ export default function ExtracurricularsPage() {
             style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
           >
             {closingSoon.map(({ item, days }) => (
-              <div key={item.id} className="grad-border press" style={{ flexShrink: 0, width: 232, padding: 14 }}>
+              <button
+                key={item.id}
+                onClick={() => setOpen_(item)}
+                className="grad-border press"
+                style={{ flexShrink: 0, width: 244, padding: 14, textAlign: 'left', cursor: 'pointer' }}
+              >
                 <p style={{ fontSize: '11px', fontWeight: 800, color: 'var(--et-amber)' }}>
                   {days} {days === 1 ? 'day' : 'days'} left
                 </p>
-                <p className="display display-md" style={{ marginTop: 4 }}>{String(item.title)}</p>
-                <p style={{ fontSize: '12px', color: 'var(--et-muted)', marginTop: 2 }}>{String(item.company)}</p>
-              </div>
+                <p
+                  className="display"
+                  style={{ marginTop: 4, fontSize: '16px', lineHeight: 1.22, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}
+                >
+                  {String(item.title)}
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--et-muted)', marginTop: 3 }}>{String(item.company)}</p>
+              </button>
             ))}
           </div>
         </section>
@@ -241,7 +253,7 @@ export default function ExtracurricularsPage() {
         ) : (
           <div className="flex flex-col gap-2.5">
             {open.map((i, n) => (
-              <OpportunityCard key={i.id} item={i} hasPapers={hasPapers === true} index={n} />
+              <OpportunityCard key={i.id} item={i} hasPapers={hasPapers === true} index={n} onOpen={setOpen_} />
             ))}
           </div>
         )}
@@ -256,7 +268,7 @@ export default function ExtracurricularsPage() {
           </div>
           <div className="flex flex-col gap-2.5">
             {upcoming.map((i, n) => (
-              <OpportunityCard key={i.id} item={i} hasPapers={hasPapers === true} index={n} />
+              <OpportunityCard key={i.id} item={i} hasPapers={hasPapers === true} index={n} onOpen={setOpen_} />
             ))}
           </div>
         </section>
@@ -345,6 +357,8 @@ export default function ExtracurricularsPage() {
           </p>
         </div>
       )}
+
+      <OpportunitySheet item={open_} hasPapers={hasPapers === true} onClose={() => setOpen_(null)} />
     </div>
   )
 }

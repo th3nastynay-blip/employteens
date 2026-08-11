@@ -62,6 +62,16 @@ export interface OpportunitySource {
   org: string
   slug: string
   apply_url: string
+  /**
+   * The organisation's OWN root domain, used for the logo.
+   *
+   * Required whenever apply_url points at a form host rather than the org:
+   * forms.gle, submittable.com, wufoo.com, myworkdayjobs.com. Resolving the
+   * favicon from the apply URL in those cases produced Google Forms' grey
+   * globe on the BGIC card and Workday's on Sloan Kettering, which is most of
+   * why the list looked like placeholder art.
+   */
+  homepage?: string
   description: string
 
   kind: 'competition' | 'program' | 'volunteer' | 'internship' | 'org_role'
@@ -105,6 +115,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Global Youth Investments',
     slug: 'bgic',
     apply_url: 'https://forms.gle/WLb6Da1qRi8Wy56x9',
+    homepage: 'globalyouthinvestments.com',
     description:
       'Write a real investment research report and pitch it live to people who actually pick stocks for a living. Open to middle and high schoolers, students from 27+ countries compete, and registered participants get preparatory workshops before submitting. The research report is the whole thing \u2014 this is not a stock-picking game, it is learning to argue a thesis with evidence. Register and submit early; the organisers say judges need time and the deadline has already been extended once.',
     kind: 'competition',
@@ -127,6 +138,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Knowledge Matters',
     slug: 'vbc-fccla',
     apply_url: 'https://www.knowledgematters.com/high-school/competitions/fccla/',
+    homepage: 'knowledgematters.com',
     description:
       'A business simulation competition run through FCCLA. You manage a virtual company and compete on the results, which makes it far more forgiving than a written case competition \u2014 you learn by replaying rather than by getting one shot. Step one is checking whether your school has an FCCLA chapter, because entry runs through it.',
     kind: 'competition',
@@ -148,6 +160,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Knowledge Matters',
     slug: 'vbc-bpa',
     apply_url: 'https://www.knowledgematters.com/high-school/competitions/bpa/',
+    homepage: 'knowledgematters.com',
     description:
       'The Business Professionals of America version of the same simulation. Same format, different chapter route. If your school has BPA rather than FCCLA, this is your entry point.',
     kind: 'competition',
@@ -169,6 +182,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Blue Ocean Student Entrepreneurs Corp',
     slug: 'blue-ocean',
     apply_url: 'https://blueoceancompetition.org/register/',
+    homepage: 'blueoceancompetition.org',
     description:
       'Submit a five-minute pitch video for a business idea. Free, fully virtual, and \u2014 unusually \u2014 no teacher sponsor or school chapter required, which makes it one of the very few real business competitions a teen can enter entirely on their own.',
     kind: 'competition',
@@ -191,6 +205,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Rutgers School of Business, Camden',
     slug: 'rutgers-ruse-camden',
     apply_url: 'https://business.camden.rutgers.edu/ruse-application/',
+    homepage: 'camden.rutgers.edu',
     description:
       'A summer business programme on the Rutgers Camden campus. Real university teaching and a campus to walk around, which does more to demystify college than any brochure. Be realistic about the trip though: Camden is roughly ninety minutes each way from Hudson County, so this only works if you can stay nearby or a parent can drive.',
     kind: 'program',
@@ -212,6 +227,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'EconEd',
     slug: 'econ-ed-join',
     apply_url: 'https://econ-ed.org/join',
+    homepage: 'econ-ed.org',
     description:
       'A student-run economics education organisation you can join and contribute to. Youth-led groups like this are often the easiest way to get an actual role and responsibility rather than just attendance, but check what the commitment involves before signing up.',
     kind: 'org_role',
@@ -235,6 +251,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'U.S. House of Representatives',
     slug: 'congressional-app-challenge',
     apply_url: 'https://www.congressionalappchallenge.us/students/student-registration/',
+    homepage: 'congressionalappchallenge.us',
     description:
       'Build an app and enter it in your own Congressional district. Judged per district rather than nationally, so the field is small and a first-time coder has a genuine shot. Winners get displayed in the Capitol. Free, any language or platform, solo or team. Robert Menendez is hosting in NJ-08, which covers Jersey City, Bayonne and Hoboken.',
     kind: 'competition',
@@ -258,6 +275,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Federal Aviation Administration',
     slug: 'faa-airport-design-challenge',
     apply_url: 'https://www.faa.gov/adc/adc_registration',
+    homepage: 'faa.gov',
     description:
       'Design a working airport in Minecraft while going through FAA engineering modules. Free, virtual, and open all the way down to K-12, which makes it one of the only real engineering competitions available below ninth grade.',
     kind: 'competition',
@@ -280,6 +298,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Johns Hopkins Center for Talented Youth',
     slug: 'jhu-cty-arduino',
     apply_url: 'https://cty.jhu.edu/cty-experience/courses/coding-and-creating-arduinor-ardc',
+    homepage: 'cty.jhu.edu',
     description:
       'A live online Arduino course for grades 7-11, taught by an instructor rather than self-paced. You need prior text-based coding experience, and CTY normally requires a qualifying test score to enrol. Tuition is significant \u2014 ask about financial aid before ruling it out, because CTY does offer it.',
     kind: 'program',
@@ -301,6 +320,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'University of Waterloo',
     slug: 'waterloo-cemc',
     apply_url: 'https://cemc.uwaterloo.ca/contests',
+    homepage: 'uwaterloo.ca',
     description:
       'Waterloo runs a whole ladder of maths and computing contests, from the Beaver Computing Challenge for younger students up to the Euclid. Well designed and genuinely respected. Two things to know: you register through your school rather than individually, so ask a maths teacher, and there is usually a per-student fee.',
     kind: 'competition',
@@ -322,6 +342,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'University of Arkansas',
     slug: 'uark-agcademy',
     apply_url: 'https://training.uark.edu/portal/training?cmd=catalog&course=razorback-agcademy-fundamentals-agri-sys-tech',
+    homepage: 'uark.edu',
     description:
       'An online course in agricultural systems and technology. Genuinely different from the usual CS-or-business menu, and useful if you are interested in food systems or environmental work. Worth checking whether enrolment is open to students outside Arkansas before you spend time on it.',
     kind: 'program',
@@ -345,6 +366,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'NASA Citizen Science',
     slug: 'cocorahs',
     apply_url: 'https://science.nasa.gov/citizen-science/community-collaborative-rain-hail-and-snow-network/',
+    homepage: 'nasa.gov',
     description:
       'Measure precipitation where you live and submit it to a national climate dataset used by the National Weather Service. Takes minutes a day, needs a cheap gauge, and there is no age minimum or application. One of the few things on this list you could genuinely start tomorrow.',
     kind: 'volunteer',
@@ -367,6 +389,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'NASA Citizen Science',
     slug: 'fresh-eyes-on-ice',
     apply_url: 'https://science.nasa.gov/citizen-science/fresh-eyes-on-ice/',
+    homepage: 'nasa.gov',
     description:
       'Report freshwater ice conditions to support safety and climate research. Most of the on-the-ground observing happens in Alaska, but the project also needs people analysing submitted imagery, which you can do from anywhere.',
     kind: 'volunteer',
@@ -389,6 +412,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'NASA Citizen Science',
     slug: 'chesapeake-water-watch',
     apply_url: 'https://science.nasa.gov/citizen-science/chesapeake-water-watch/',
+    homepage: 'nasa.gov',
     description:
       'Photograph water and take simple measurements so researchers can calibrate satellite readings of water quality. Focused on the Chesapeake, so check whether they accept observations from other watersheds before committing \u2014 the Hackensack Riverkeeper cleanups may be the better local fit.',
     kind: 'volunteer',
@@ -411,6 +435,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Great Sunflower Project',
     slug: 'great-sunflower-project',
     apply_url: 'https://www.greatsunflower.org/quickguide',
+    homepage: 'greatsunflower.org',
     description:
       'Sit by a flowering plant for fifteen minutes and count the pollinators that visit, then submit it. That is the entire method. The data feeds real conservation work, it needs nothing but a phone, and it is one of the easiest ways to build up consistent logged hours over a summer.',
     kind: 'volunteer',
@@ -435,6 +460,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'North Bergen Free Public Library',
     slug: 'nbpl-teen-volunteer',
     apply_url: 'https://nbpl.org/teen-volunteer/',
+    homepage: 'nbpl.org',
     description:
       'Three ways in: Homework Help volunteering with younger kids, the Teen Advisory Board which plans and runs library programming, and Score Up summer volunteering. Open from seventh grade, free, and \u2014 the part that matters \u2014 the library issues a letter verifying your hours, which is a reference in writing. You must live in North Bergen or Guttenberg. Fill in a volunteer form at the youth services desk and wait for a librarian to call. Note the main library is closed for renovation; the temporary location is 510 81st Street.',
     kind: 'volunteer',
@@ -458,6 +484,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Hackensack Riverkeeper',
     slug: 'hackensack-riverkeeper-cleanups',
     apply_url: 'https://www.hackensackriverkeeper.org/cleanups',
+    homepage: 'hackensackriverkeeper.org',
     description:
       'Show up to a scheduled cleanup on the Hackensack River and put in a morning. No application, no interview, no minimum commitment, and it is the most straightforward local volunteering on this list. Go repeatedly and the organisers will know your name, which is how a morning turns into a reference.',
     kind: 'volunteer',
@@ -480,6 +507,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Meadowlands Research & Restoration Institute',
     slug: 'meadowlands-monitoring',
     apply_url: 'https://meadowlandsrri.com/high-school-educational-monitoring-program/',
+    homepage: 'meadowlandsrri.com',
     description:
       'Classes test their local waterway all year using a monitoring kit, measuring dissolved oxygen, nitrates, pH and more, and the data goes to the Institute for review and public release. Real science that gets used. Important: this runs through schools, not individuals \u2014 Bayonne PS #14 and Lyndhurst High are already in the network. So the move is asking a science teacher to join, not applying yourself.',
     kind: 'program',
@@ -502,6 +530,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Greater Newark Conservancy',
     slug: 'greater-newark-volunteer',
     apply_url: 'https://greaternewark.org/volunteer-form-community-group/',
+    homepage: 'greaternewark.org',
     description:
       'Urban farming, garden builds and neighbourhood greening in Newark. The form on this page is set up for community groups, so if you are going on your own it is worth emailing first to ask how an individual teen joins.',
     kind: 'volunteer',
@@ -526,6 +555,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'DOROT',
     slug: 'dorot-teen-internship',
     apply_url: 'https://www.dorotusa.org/volunteer/academic-year-teen-internship/',
+    homepage: 'dorotusa.org',
     description:
       'A structured internship pairing teens with older adults across the school year. Properly supervised with real training, which is rare for something open to high schoolers, and it means you finish with a named staff member who has watched you work for months rather than a certificate.',
     kind: 'internship',
@@ -549,6 +579,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Memorial Sloan Kettering',
     slug: 'msk-53rd-street-volunteers',
     apply_url: 'https://msk.wd108.myworkdayjobs.com/MSKCC_Careers_Primary/job/New-York-NY/XMLNAME-53rd-Street-Outpatient-Volunteers_92807',
+    homepage: 'mskcc.org',
     description:
       'Volunteering in an outpatient cancer centre, which is about as real as clinical exposure gets before college. Expect an application, screening and a term commitment. Hospital volunteering usually carries a minimum age of 16 or 18 \u2014 check the posting before you plan around it.',
     kind: 'volunteer',
@@ -572,6 +603,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Brooklyn Book Bodega',
     slug: 'brooklyn-book-bodega',
     apply_url: 'https://www.brooklynbookbodega.org/volunteer',
+    homepage: 'brooklynbookbodega.org',
     description:
       'Sorting and distributing books to get them into kids\u2019 homes across Brooklyn. Concrete, physical, and easy to explain later. Shift-based, so you can start with one Saturday and see how it goes.',
     kind: 'volunteer',
@@ -594,6 +626,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Brooklyn Public Library',
     slug: 'brooklyn-public-library-volunteer',
     apply_url: 'https://www.bklynlibrary.org/volunteer',
+    homepage: 'bklynlibrary.org',
     description:
       'The Brooklyn system runs teen volunteering across dozens of branches, so there is almost certainly one near wherever you are. Library volunteering is consistently one of the best first placements: welcoming to younger teens, genuinely useful, and staff are used to writing verification letters.',
     kind: 'volunteer',
@@ -617,6 +650,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Brooklyn College',
     slug: 'brooklyn-college-prep-center',
     apply_url: 'https://www.brooklyn.edu/prepcenter/',
+    homepage: 'brooklyn.edu',
     description:
       'College preparation programmes run on the Brooklyn College campus. Being on a real campus and taught by university staff does more for a first-generation student than any amount of advice. Check cost and eligibility on the page \u2014 some prep programmes are grant-funded and free, others are not.',
     kind: 'program',
@@ -638,6 +672,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Brooklyn Children\u2019s Theatre',
     slug: 'brooklyn-childrens-theatre',
     apply_url: 'https://www.brooklynchildrenstheatre.org/classes/',
+    homepage: 'brooklynchildrenstheatre.org',
     description:
       'Performance classes and a teen ensemble in Brooklyn. Be clear-eyed that this is a paid class rather than a role you are selected for, so it builds skill rather than a track record. Worth it if performing is the thing you actually care about; check tuition and any scholarship options first.',
     kind: 'program',
@@ -659,6 +694,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Columbia University',
     slug: 'cmunce',
     apply_url: 'https://cmunce.org/register-here',
+    homepage: 'columbia.edu',
     description:
       'A Model UN conference run by Columbia students, held on campus in Manhattan. Strong crisis committees and a genuinely competitive field. Two things to sort first: delegates normally register through a school delegation rather than individually, and conferences like this carry a delegate fee.',
     kind: 'competition',
@@ -682,6 +718,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'C-SPAN Education Foundation',
     slug: 'cspan-studentcam',
     apply_url: 'https://www.studentcam.org/',
+    homepage: 'c-span.org',
     description:
       'Make a five to six minute documentary about a public policy issue that matters to you, using some C-SPAN footage. Free, open from sixth grade, solo or in a team of three, and $100,000 in prizes spread across 150 winners \u2014 which means the odds are far better than most national competitions. Strong entries show the other side of the argument, not just yours.',
     kind: 'competition',
@@ -704,6 +741,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'K12 Enrichment',
     slug: 'k12-photo-competition',
     apply_url: 'https://enrichment.k12.com/photo-competition-registration/',
+    homepage: 'k12.com',
     description:
       'A free nationwide photography competition where you submit original photographs and the story behind them. No equipment requirement beyond a camera or a phone, which makes it one of the more accessible arts competitions on this list.',
     kind: 'competition',
@@ -726,6 +764,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'National Constitution Center',
     slug: 'ncc-decoding-the-document',
     apply_url: 'https://constitutioncenter.org/education/live-online-events/decoding-the-document',
+    homepage: 'constitutioncenter.org',
     description:
       'Live online sessions where constitutional scholars work through a founding document with students. Free, no application, and you can drop into one to see whether it is your thing. Not a credential, but genuinely good if law or politics interests you and you want something more substantial than a video.',
     kind: 'program',
@@ -748,6 +787,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'International Youth Film Festival',
     slug: 'iyff-submit',
     apply_url: 'https://internationalyouthfilmfestival.org/submit-2026',
+    homepage: 'internationalyouthfilmfestival.org',
     description:
       'Submit a film to a festival judged against other young filmmakers worldwide. A selection or a screening is a real, citable result. Festivals normally charge a submission fee, so check that and the category rules before you finish your edit.',
     kind: 'competition',
@@ -771,6 +811,7 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     org: 'Connect Me',
     slug: 'connect-me-tutor',
     apply_url: 'https://connectmego.org/tutor-application/',
+    homepage: 'connectmego.org',
     description:
       'One-to-one online tutoring for students who need it, run by high school and college volunteers. You tutor a subject you are already good at, on your own schedule, from home. Programmes like this normally set a minimum age around 16 and ask you to pass a subject check, so read the application before counting on it.',
     kind: 'volunteer',

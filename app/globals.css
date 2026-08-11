@@ -459,17 +459,23 @@ body {
 .numbered::before {
   content: attr(data-n);
   position: absolute;
-  top: -10px;
-  right: 0;
+  /* Sat at top:-10 right:0 and collided with the heading it was meant to sit
+     behind — "01" landed on top of "You can apply today". Pulled up and out,
+     and the text is lifted above it below. */
+  top: -22px;
+  right: -6px;
   font-family: var(--font-display);
   font-size: 62px;
   font-weight: 800;
   line-height: 1;
   color: var(--et-ink);
-  opacity: 0.055;
+  opacity: 0.05;
   pointer-events: none;
   user-select: none;
+  z-index: 0;
 }
+/* Ghost numerals are background texture. Text always wins. */
+.numbered > * { position: relative; z-index: 1; }
 .numbered-eyebrow {
   font-family: var(--font-display);
   font-size: 11px;

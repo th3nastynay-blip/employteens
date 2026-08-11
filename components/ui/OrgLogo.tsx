@@ -77,13 +77,35 @@ interface Props {
   radius?: number
 }
 
+/**
+ * Is this a Google favicon URL?
+ *
+ * THE BUG THAT ATE SEVEN ATTEMPTS. supabase/migrations/add_logo_url.sql
+ * backfilled EVERY job row with
+ *
+ *     https://www.google.com/s2/favicons?domain=<company>
+ *
+ * and OrgLogo starts `src ? [src] : brand ...`, so a populated logo_url meant
+ * the brand table and every local file were never consulted. Google then
+ * returned its fabricated letter tile for Insomnia Cookies (the green "L") and
+ * nothing for Target (the red "TA"). Both symptoms, one cause, sitting in the
+ * database the whole time while I changed code downstream of it.
+ *
+ * Treated as no src at all. A stored value we know to be poison is worse than
+ * an empty column.
+ */
+function isPoisonedSrc(u: string | null | undefined): boolean {
+  return typeof u === 'string' && /google\.com\/s2\/favicons/i.test(u)
+}
+
 export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
   const brand = brandFor(name)
+  const usableSrc = isPoisonedSrc(src) ? null : src
 
   // An ORDERED chain, not a single URL. Each source 404s honestly when it has
   // nothing, so onError advancing the index is a real signal rather than a
   // guess. Index past the end = every source failed = brand tile.
-  const sources = src ? [src] : brand ? logoSources(brand, size * 2) : []
+  const sources = usableSrc ? [usableSrc] : brand ? logoSources(brand, size * 2) : []
   const [idx, setIdx] = useState(0)
 
   const resolved = idx < sources.length ? sources[idx] : null

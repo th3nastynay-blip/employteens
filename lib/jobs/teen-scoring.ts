@@ -287,8 +287,13 @@ const TEEN_ROLE_PATTERNS: RegExp[] = [
   /\b(delivery (driver|associate)|driver|courier|bike (courier|delivery))\b/i,
   // Food service
   /\b(barista|server|waiter|waitress|host|hostess|busser|dishwasher|line cook|prep cook|cook|food runner|expeditor|sandwich (artist|maker)|pizza maker|scooper|cake decorator)\b/i,
-  // Warehouse and stockroom, non-hazardous
-  /\b(warehouse associate|package handler|order (picker|selector)|fulfillment associate|inventory associate|shopper|picker|packer)\b/i,
+  // Warehouse and stockroom, non-hazardous.
+  // "operations associate" earns its place on evidence: the first v7 dry run
+  // returned 19 unrecognised titles out of 60, and 15 of them were this exact
+  // Gopuff title. It is a micro-fulfilment picking role and squarely teen
+  // work. Note what is NOT here — bare "associate" — because that would also
+  // wave through "Master Data Associate" from the same run.
+  /\b(warehouse associate|operations associate|package handler|order (picker|selector)|fulfillment associate|inventory associate|shopper|picker|packer)\b/i,
   // Recreation, camp, sport
   /\b(lifeguard|camp counsellor|camp counselor|swim instructor|referee|umpire|ride operator|park attendant|caddie|ski instructor)\b/i,
   // Clerical and library

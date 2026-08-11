@@ -1,5 +1,40 @@
 'use client'
 
+/**
+ * EMPLOYTEENS — profile
+ *
+ * Rebuilt against the Appybara profile reference. Three structural moves came
+ * from it and one large deletion did not.
+ *
+ * 1. SECTIONS GET A HEAD, NOT A LABEL. Every section here used to open with
+ *    11px grey uppercase text, so the page read as one long form and nothing
+ *    stood out from anything else. Icon plus a display-weight heading, per
+ *    components/profile/Section.tsx.
+ *
+ * 2. EMPTY SECTIONS ARE BUTTONS, NOT ABSENCES. The old page hid a section when
+ *    it had no data, or printed "Not set". A new teen therefore saw a four-item
+ *    profile with no indication that skills, resume or transport existed at
+ *    all — we were hiding the work from the person who has to do it. Now every
+ *    section always renders, and an empty one is a dashed tile the same size as
+ *    the filled version, saying what they get out of filling it.
+ *
+ * 3. THE LADDER IS THE SPINE. Appybara's equivalent slot is "How strong is your
+ *    profile?" leading to a Chance Me score. We cannot and should not rank a
+ *    15-year-old in Bayonne against other applicants, but we CAN say exactly
+ *    what is on their record and what the next rung needs. See LadderStrip.
+ *
+ * THE DELETION. "What your AI knows about you" generated up to four sentences
+ * from the teen's own onboarding answers and presented them back as insight:
+ * "Public transit access increases your eligible job radius by up to 10 miles",
+ * "Multiple transport options give you the widest job reach of any profile
+ * type". Both numbers were invented — no code computes a 10-mile transit bonus
+ * or ranks "profile types" by reach. It restated inputs as analysis and made up
+ * statistics to do it, in a product used by minors. Gone, along with
+ * generateInsights(). The honest version of that block is the ladder, which
+ * only ever states things we hold evidence for and labels self-report as
+ * self-report.
+ */
+
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
@@ -9,118 +44,49 @@ import {
   deserializeInterests,
   TRANSPORTATION_OPTIONS,
   GRADE_LABELS,
-  type Transportation,
   type WeightedInterest,
 } from '@/lib/types/onboarding'
 import type { UserProfile } from '@/lib/types/database'
+import { detectRung, type LadderEvent, type Rung } from '@/lib/rungs'
 import { ProfileHeader, type ProfileStep } from '@/components/profile/ProfileHeader'
 import { ReferenceCard, type ReferenceState } from '@/components/profile/ReferenceCard'
+import { LadderStrip } from '@/components/profile/LadderStrip'
+import { SectionHead, AddTile, Panel } from '@/components/profile/Section'
 
-
-// ── AI Insights engine ────────────────────────────────────────────────
-function generateInsights(
-  profile: UserProfile,
-  transports: Transportation[],
-  interests: WeightedInterest[],
-  savedCount: number,
-  appliedCount: number,
-): string[] {
-  const insights: string[] = []
-  const availability = profile.availability as Record<string, boolean>
-
-  const availableDays = Object.entries(availability ?? {}).filter(([, v]) => v).map(([k]) => k)
-  const hasWeekend = availability?.saturday || availability?.sunday
-  const hasWeekdays = ['monday','tuesday','wednesday','thursday','friday'].some((d) => availability?.[d])
-
-  if (hasWeekend && hasWeekdays) {
-    insights.push('You have strong availability — both weekdays and weekends unlock more employer options.')
-  } else if (hasWeekend && !hasWeekdays) {
-    insights.push('Weekend-only availability focuses your feed on retail, food, and entertainment employers who prefer weekend staff.')
-  } else if (!hasWeekend && hasWeekdays) {
-    insights.push('Weekday-only availability works well for after-school programs, tutoring, and office support roles.')
-  }
-
-  if (transports.includes('public_transit')) {
-    insights.push('Public transit access increases your eligible job radius by up to 10 miles — significantly more options than walking alone.')
-  }
-  if (transports.length >= 3) {
-    insights.push('Multiple transport options give you the widest job reach of any profile type.')
-  }
-
-  const topInterest = interests.sort((a, b) => b.weight - a.weight)[0]
-  if (topInterest) {
-    const interestMap: Record<string, string> = {
-      'Food & Restaurants': 'food service roles with flexible after-school hours',
-      'Retail & Shopping': 'retail positions — some of the most teen-friendly employers in NY/NJ',
-      'Technology': 'tech-adjacent roles like IT support and help desk (rare but high-paying for teens)',
-      'Customer Service': 'front-facing roles where communication skills shine',
-      'Entertainment & Movies': 'entertainment venues with great employee perks',
-    }
-    const mapping = interestMap[topInterest.name]
-    if (mapping) {
-      insights.push(`Your top interest (${topInterest.name}) aligns with ${mapping}.`)
-    }
-  }
-
-  if (availableDays.length >= 5) {
-    insights.push('Your wide availability makes you a preferred candidate — most employers want flexibility.')
-  }
-
-  if (savedCount > 0 && appliedCount === 0) {
-    insights.push(`You've saved ${savedCount} job${savedCount > 1 ? 's' : ''} but haven't applied yet. Apply this week — employers notice recent applicants first.`)
-  }
-
-  return insights.slice(0, 4)
-}
-
-// ── Completion score ──────────────────────────────────────────────────
-
-// ── Components ────────────────────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--et-placeholder)', letterSpacing: '0.07em', textTransform: 'uppercase', padding: '0 4px' }}>
-      {children}
-    </p>
-  )
-}
-
-function ProfileCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <div className="card" style={{ borderRadius: 'var(--radius-xl)', ...style }}>
-      {children}
-    </div>
-  )
-}
+const DAYS = [
+  { key: 'monday', short: 'M' },
+  { key: 'tuesday', short: 'T' },
+  { key: 'wednesday', short: 'W' },
+  { key: 'thursday', short: 'T' },
+  { key: 'friday', short: 'F' },
+  { key: 'saturday', short: 'S' },
+  { key: 'sunday', short: 'S' },
+]
 
 function AvailabilityGrid({ availability }: { availability: Record<string, boolean> }) {
-  const days = [
-    { key: 'monday', short: 'M' },
-    { key: 'tuesday', short: 'T' },
-    { key: 'wednesday', short: 'W' },
-    { key: 'thursday', short: 'T' },
-    { key: 'friday', short: 'F' },
-    { key: 'saturday', short: 'S' },
-    { key: 'sunday', short: 'S' },
-  ]
   return (
-    <div className="flex gap-2 pt-3">
-      {days.map(({ key, short }) => {
+    <div className="flex gap-2" style={{ marginTop: 12 }}>
+      {DAYS.map(({ key, short }, i) => {
         const on = availability[key]
         return (
           <div key={key} className="flex flex-col items-center gap-1.5 flex-1">
-            <p style={{ fontSize: '9px', fontWeight: 700, color: 'var(--et-placeholder)', textTransform: 'uppercase' }}>{short}</p>
-            <div style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: on ? 'var(--et-blue)' : 'var(--et-ground)',
-              border: on ? 'none' : '1.5px solid var(--et-border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+            <p style={{ fontSize: '9px', fontWeight: 700, color: 'var(--et-placeholder)' }}>{short}</p>
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.03 * i, ease: [0.22, 1, 0.36, 1] }}
+              style={{
+                width: '100%', height: 30, borderRadius: 9,
+                background: on ? 'linear-gradient(180deg, var(--et-match-from), var(--et-match-to))' : 'var(--et-ground)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
               {on && (
-                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                  <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <svg width="11" height="9" viewBox="0 0 10 8" fill="none" aria-hidden="true">
+                  <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
-            </div>
+            </motion.div>
           </div>
         )
       })}
@@ -128,38 +94,56 @@ function AvailabilityGrid({ availability }: { availability: Record<string, boole
   )
 }
 
-
-// ── Main page ─────────────────────────────────────────────────────────
 export default function ProfilePage() {
   const router = useRouter()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [savedCount, setSavedCount] = useState(0)
   const [appliedCount, setAppliedCount] = useState(0)
+  const [events, setEvents] = useState<LadderEvent[]>([])
 
   const load = useCallback(async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
 
-      try {
-        const [
-          { data: profileData },
-          { count: saved },
-          { count: applied },
-        ] = await Promise.all([
-          supabase.from('users').select('*').eq('id', user.id).single(),
-          supabase.from('applications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'saved'),
-          supabase.from('applications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'applied'),
-        ])
-        if (profileData) setProfile(profileData as unknown as UserProfile)
-        setSavedCount(saved ?? 0)
-        setAppliedCount(applied ?? 0)
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
+    try {
+      const [{ data: profileData }, { data: apps }] = await Promise.all([
+        supabase.from('users').select('*').eq('id', user.id).single(),
+        // Full rows, not counts. The ladder needs outcomes and response dates,
+        // and fetching them here means one round trip instead of three.
+        supabase
+          .from('applications')
+          .select('status, applied_at, outcome, first_response_at, jobs (kind, evidence_kind)')
+          .eq('user_id', user.id),
+      ])
+
+      if (profileData) setProfile(profileData as unknown as UserProfile)
+
+      type Raw = {
+        status: LadderEvent['status']
+        applied_at: string | null
+        outcome: LadderEvent['outcome']
+        first_response_at: string | null
+        jobs: { kind: string | null; evidence_kind: string | null } | null
       }
+      const rows = (apps ?? []) as unknown as Raw[]
+
+      setEvents(rows.map((a) => ({
+        kind: a.jobs?.kind ?? 'job',
+        status: a.status,
+        applied_at: a.applied_at,
+        outcome: a.outcome,
+        first_response_at: a.first_response_at,
+        evidence_kind: a.jobs?.evidence_kind ?? null,
+      })))
+      setSavedCount(rows.filter((a) => a.status === 'saved').length)
+      setAppliedCount(rows.filter((a) => a.status !== 'saved').length)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -167,8 +151,6 @@ export default function ProfilePage() {
     void load()
   }, [load])
 
-  // Called after the reference form saves, so the card flips from the form to
-  // the pending state without a manual refresh.
   const reload = useCallback(() => { void load() }, [load])
 
   async function handleSignOut() {
@@ -177,7 +159,8 @@ export default function ProfilePage() {
     router.push('/')
   }
 
-  // ── Loading skeleton ────────────────────────────────────────────────
+  const toOnboarding = useCallback(() => router.push('/onboarding'), [router])
+
   if (loading) {
     return (
       <div className="px-5 pt-safe-header flex flex-col gap-4">
@@ -188,42 +171,29 @@ export default function ProfilePage() {
     )
   }
 
-  // ── No profile ──────────────────────────────────────────────────────
   if (!profile) {
     return (
       <div className="px-5 flex flex-col items-center gap-5" style={{ paddingTop: 80 }}>
         <div style={{ width: 64, height: 64, borderRadius: 'var(--radius-lg)', background: 'var(--et-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>👤</div>
         <div style={{ textAlign: 'center' }}>
-          <h2 className="text-h2" style={{ color: 'var(--et-ink)' }}>Profile not set up yet</h2>
+          <h2 className="display display-lg">Nothing here yet</h2>
           <p style={{ fontSize: '14px', color: 'var(--et-muted)', marginTop: 6, lineHeight: 1.5 }}>
-            Complete onboarding to unlock AI job matches.
+            Answer a few questions and we can start matching you.
           </p>
         </div>
-        <a href="/onboarding"><button className="btn-primary" style={{ borderRadius: 'var(--radius-full)' }}>Complete onboarding →</button></a>
+        <a href="/onboarding"><button className="btn-primary" style={{ borderRadius: 'var(--radius-full)' }}>Get started</button></a>
         <button onClick={handleSignOut} style={{ background: 'none', border: 'none', fontSize: '14px', color: 'var(--et-muted)', cursor: 'pointer', fontWeight: 500 }}>Sign out</button>
       </div>
     )
   }
 
-  // ── Deserialize stored data ─────────────────────────────────────────
   const transports = deserializeTransportation(profile.transportation as string)
   const interests: WeightedInterest[] = deserializeInterests(profile.interests)
   const skills = (profile.skills as string[]) ?? []
   const availability = (profile.availability as Record<string, boolean>) ?? {}
-  const insights = generateInsights(profile, transports, interests, savedCount, appliedCount)
   const gradeLabel = GRADE_LABELS[profile.school_grade as keyof typeof GRADE_LABELS] ?? profile.school_grade
-  const availableDays = Object.entries(availability).filter(([, v]) => v).map(([k]) => k.charAt(0).toUpperCase() + k.slice(1))
+  const availableDays = Object.entries(availability).filter(([, v]) => v).map(([k]) => k)
   const primaryTransport = transports[0]
-
-  // The facts that gate what a teen can even be shown. Stated once, at the
-  // top, rather than buried across five sections further down the page.
-  const attributes = [
-    profile.age ? `Age ${profile.age}` : null,
-    gradeLabel ? String(gradeLabel) : null,
-    profile.state ? `${profile.state} ${profile.zip_code ?? ''}`.trim() : null,
-    primaryTransport ? TRANSPORTATION_OPTIONS.find((t) => t.value === primaryTransport)?.label ?? null : null,
-    availableDays.length > 0 ? `${availableDays.length} days free` : null,
-  ].filter((x): x is string => Boolean(x))
 
   const p = profile as unknown as Record<string, unknown>
   const referenceState: ReferenceState = {
@@ -236,8 +206,28 @@ export default function ProfilePage() {
     token: (p.reference_token as string | null) ?? null,
   }
 
-  // One circle per thing we actually need. `done` is derived from the data,
-  // never asserted — an empty array is not a completed step.
+  const ladder = detectRung({
+    age: (profile.age as number) ?? null,
+    hasWorkingPapers: (p.has_working_papers as boolean | null) ?? null,
+    events,
+    reference: referenceState.name
+      ? {
+          name: referenceState.name,
+          role: referenceState.role ?? '',
+          org: referenceState.org ?? undefined,
+          confirmedAt: referenceState.confirmedAt,
+        }
+      : null,
+  })
+
+  const attributes = [
+    profile.age ? `Age ${profile.age}` : null,
+    gradeLabel ? String(gradeLabel) : null,
+    profile.state ? `${profile.state} ${profile.zip_code ?? ''}`.trim() : null,
+    primaryTransport ? TRANSPORTATION_OPTIONS.find((t) => t.value === primaryTransport)?.label ?? null : null,
+    availableDays.length > 0 ? `${availableDays.length} days free` : null,
+  ].filter((x): x is string => Boolean(x))
+
   const steps: ProfileStep[] = [
     { id: 'basics', label: 'Basics', done: Boolean(profile.name && profile.age) },
     { id: 'location', label: 'Location', done: Boolean(profile.zip_code) },
@@ -247,18 +237,12 @@ export default function ProfilePage() {
     { id: 'interests', label: 'Interests', done: interests.length > 0 },
     { id: 'skills', label: 'Skills', done: skills.length > 0 },
     { id: 'resume', label: 'Resume', done: Boolean(profile.resume_url) },
-    // Only counts once the adult has actually confirmed. Naming someone is
-    // asking, not having.
+    // Naming someone is asking, not having.
     { id: 'reference', label: 'Reference', done: Boolean(referenceState.confirmedAt) },
   ]
 
   return (
     <div className="flex flex-col pb-nav">
-
-      {/* ── Header ──
-          Rebuilt on the Appybara reference: attribute row, then identity, then
-          a numbered stepper. See components/profile/ProfileHeader.tsx for what
-          we took from it and what we deliberately did not. */}
       <div className="pt-safe-header pb-2">
         <ProfileHeader
           name={profile.name}
@@ -266,232 +250,183 @@ export default function ProfilePage() {
           steps={steps}
           savedCount={savedCount}
           appliedCount={appliedCount}
-          onStep={() => router.push('/onboarding')}
+          onStep={toOnboarding}
         />
       </div>
 
-      <div className="px-4 flex flex-col gap-4">
+      <div className="px-4 flex flex-col" style={{ gap: 22, marginTop: 18 }}>
 
-        {/* ── REMOVED: Career Snapshot card + completion nudge ──
-            This page was stating one fact four separate times: an 80% ring, a
-            "Profile 80%" stat, a "Missing: x, y, z" nudge, and the header
-            stepper. Four widgets, one number, none of them actionable.
-
-            A percentage is a GRADE. It tells a teen they are failing at
-            something without telling them what to do, and 80% specifically is
-            the worst of both — high enough to feel finished, low enough to
-            nag. The stepper in ProfileHeader already answers the real
-            question ("step 4 of 9, next is Availability"), is tappable, and
-            takes them somewhere.
-
-            The avatar, name, age and saved/applied counts all moved into
-            ProfileHeader too, so the whole card was duplicate chrome.
-
-            getCompletion() and CompletionRing are gone with it. If a single
-            number is ever needed again — for admin or cohort reporting — the
-            stepper's done/total is the honest source, not a weighted score
-            nobody can audit. */}
+        {/* ── The climb ── */}
+        <LadderStrip
+          rung={ladder.rung as Rung}
+          confidence={ladder.confidence}
+          vouchedBy={referenceState.confirmedAt ? referenceState.name : null}
+        />
 
         {/* ── Reference ──
-            Sits high on the page on purpose. It is the only claim here that
-            somebody other than the teen can confirm, so it outranks the
-            insights, the availability grid and everything below it. */}
+            High on the page because it is the only claim here that somebody
+            other than the teen can confirm. It outranks everything below it. */}
         <ReferenceCard reference={referenceState} onSaved={reload} />
 
-        {/* ── AI Insights ── */}
-        {insights.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <SectionLabel>AI Insights</SectionLabel>
-            <ProfileCard style={{ padding: '16px 20px', gap: 12, display: 'flex', flexDirection: 'column' }}>
-              <div className="flex items-center gap-2.5" style={{ marginBottom: 4 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                  background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M7 1L8.5 5.5H13L9.5 8L11 12.5L7 10L3 12.5L4.5 8L1 5.5H5.5L7 1Z" fill="white" fillOpacity="0.9" />
-                  </svg>
-                </div>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--et-ink)' }}>What your AI knows about you</p>
-              </div>
-              {insights.map((insight, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -4 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 + i * 0.07 }}
-                  className="flex items-start gap-3"
-                >
-                  <div style={{
-                    width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1,
-                    background: 'var(--et-blue-light)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <path d="M1 4L3.5 6.5L9 1" stroke="var(--et-blue)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <p style={{ fontSize: '13px', color: 'var(--et-subtle)', lineHeight: 1.5 }}>{insight}</p>
-                </motion.div>
-              ))}
-            </ProfileCard>
-          </div>
-        )}
-
         {/* ── Availability ── */}
-        <div className="flex flex-col gap-2">
-          <SectionLabel>Availability</SectionLabel>
-          <ProfileCard style={{ padding: '16px 20px' }}>
-            <div className="flex items-center justify-between">
-              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--et-ink)' }}>
-                {availableDays.length > 0
-                  ? `${availableDays.length} days per week`
-                  : 'Not set'}
-              </p>
-              <p style={{ fontSize: '12px', color: 'var(--et-muted)' }}>
-                Out at {profile.school_end_time}
-              </p>
-            </div>
-            {Object.values(availability).some(Boolean) ? (
+        <div>
+          <SectionHead icon="clock" title="When you're free" action="Edit" onAction={toOnboarding} />
+          {availableDays.length > 0 ? (
+            <Panel>
+              <div className="flex items-baseline justify-between">
+                <p className="display" style={{ fontSize: '15px' }}>
+                  {availableDays.length} {availableDays.length === 1 ? 'day' : 'days'} a week
+                </p>
+                {profile.school_end_time && (
+                  <p style={{ fontSize: '12px', color: 'var(--et-muted)' }}>
+                    Out at {String(profile.school_end_time)}
+                  </p>
+                )}
+              </div>
               <AvailabilityGrid availability={availability} />
-            ) : (
-              <p style={{ fontSize: '13px', color: 'var(--et-placeholder)', marginTop: 8 }}>
-                Complete onboarding to add your availability
-              </p>
-            )}
-          </ProfileCard>
+            </Panel>
+          ) : (
+            <AddTile
+              label="Add the days you can work"
+              hint="The first thing a manager asks, and it decides most of your feed."
+              onClick={toOnboarding}
+            />
+          )}
         </div>
 
-        {/* ── Transportation ── */}
-        <div className="flex flex-col gap-2">
-          <SectionLabel>Transportation</SectionLabel>
-          <ProfileCard style={{ padding: '16px 20px' }}>
-            {transports.length === 0 ? (
-              <p style={{ fontSize: '13px', color: 'var(--et-placeholder)' }}>Not set</p>
-            ) : (
-              <div className="flex flex-col gap-2.5">
+        {/* ── Transport ── */}
+        <div>
+          <SectionHead icon="route" title="Getting there" action="Edit" onAction={toOnboarding} />
+          {transports.length > 0 ? (
+            <Panel>
+              <div className="flex flex-col gap-3">
                 {transports.map((t, i) => {
                   const opt = TRANSPORTATION_OPTIONS.find((o) => o.value === t)
                   if (!opt) return null
                   return (
                     <div key={t} className="flex items-center gap-3">
-                      <span style={{ fontSize: '20px' }}>{opt.emoji}</span>
-                      <div className="flex-1">
+                      <span style={{ fontSize: '20px', width: 24, textAlign: 'center' }}>{opt.emoji}</span>
+                      <div className="flex-1" style={{ minWidth: 0 }}>
                         <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--et-ink)' }}>{opt.label}</p>
-                        <p style={{ fontSize: '12px', color: 'var(--et-muted)' }}>{opt.rangeLabel}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--et-muted)', marginTop: 1 }}>{opt.rangeLabel}</p>
                       </div>
-                      {i === 0 && (
-                        <span className="badge badge-blue" style={{ fontSize: '10px', padding: '2px 8px' }}>Primary</span>
-                      )}
+                      {i === 0 && <span className="pill pill-blue">Main</span>}
                     </div>
                   )
                 })}
               </div>
-            )}
-          </ProfileCard>
-        </div>
-
-        {/* ── Career Interests ── */}
-        {interests.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <SectionLabel>Career Interests</SectionLabel>
-            <ProfileCard style={{ padding: '16px 20px' }}>
-              <div className="flex flex-col gap-2">
-                {interests
-                  .sort((a, b) => b.weight - a.weight)
-                  .map(({ name, weight }) => {
-                    const widthPct = weight === 3 ? 100 : weight === 2 ? 66 : 33
-                    const weightLabel = weight === 3 ? 'High' : weight === 2 ? 'Medium' : 'Low'
-                    return (
-                      <div key={name}>
-                        <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-                          <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--et-ink)' }}>{name}</p>
-                          <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--et-placeholder)' }}>{weightLabel}</p>
-                        </div>
-                        <div style={{ height: 4, background: 'var(--et-ground)', borderRadius: 4, overflow: 'hidden' }}>
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${widthPct}%` }}
-                            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
-                            style={{ height: '100%', background: 'linear-gradient(90deg, #2563EB, #7C3AED)', borderRadius: 4 }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            </ProfileCard>
-          </div>
-        )}
-
-        {/* ── Skills ── */}
-        {skills.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <SectionLabel>Skills</SectionLabel>
-            <ProfileCard style={{ padding: '16px 20px' }}>
-              <div className="flex flex-wrap gap-2">
-                {skills.map((skill) => (
-                  <span key={skill} className="badge badge-subtle" style={{ fontSize: '12px', padding: '5px 12px' }}>{skill}</span>
-                ))}
-              </div>
-            </ProfileCard>
-          </div>
-        )}
-
-        {/* ── Resume ── */}
-        <div className="flex flex-col gap-2">
-          <SectionLabel>Resume</SectionLabel>
-          {profile.resume_url ? (
-            <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-              <ProfileCard style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--et-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 3H13L17 7V17C17 17.55 16.55 18 16 18H4C3.45 18 3 17.55 3 17V4C3 3.45 3.45 3 4 3H5Z" stroke="var(--et-blue)" strokeWidth="1.5" strokeLinejoin="round" />
-                    <path d="M13 3V7H17" stroke="var(--et-blue)" strokeWidth="1.5" strokeLinejoin="round" />
-                    <path d="M7 11H13M7 14H10" stroke="var(--et-blue)" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--et-ink)' }}>Resume uploaded</p>
-                  <p style={{ fontSize: '12px', color: 'var(--et-blue)', marginTop: 1 }}>Tap to view →</p>
-                </div>
-              </ProfileCard>
-            </a>
+            </Panel>
           ) : (
-            <ProfileCard style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--et-ground)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <path d="M9 4V14M4 9H14" stroke="var(--et-placeholder)" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--et-subtle)' }}>No resume yet</p>
-                <p style={{ fontSize: '12px', color: 'var(--et-placeholder)', marginTop: 1 }}>Ask AI Coach to build one for you</p>
-              </div>
-            </ProfileCard>
+            <AddTile
+              label="Add how you get around"
+              hint="Sets how far we look. Without it we can only show you walking distance."
+              onClick={toOnboarding}
+            />
           )}
         </div>
 
-        {/* ── Sign out ── */}
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleSignOut}
-          style={{
-            width: '100%', height: 46, borderRadius: 'var(--radius-full)',
-            background: 'none', border: '1.5px solid var(--et-border-mid)',
-            fontSize: '14px', fontWeight: 600, color: 'var(--et-muted)',
-            cursor: 'pointer', marginTop: 4,
-          }}
-        >
-          Sign out
-        </motion.button>
+        {/* ── Interests ── */}
+        <div>
+          <SectionHead icon="compass" title="What you're into" action="Edit" onAction={toOnboarding} />
+          {interests.length > 0 ? (
+            <Panel>
+              <div className="flex flex-col gap-2.5">
+                {[...interests].sort((a, b) => b.weight - a.weight).map(({ name, weight }, i) => (
+                  <div key={name}>
+                    <div className="flex items-center justify-between" style={{ marginBottom: 5 }}>
+                      <p style={{ fontSize: '13.5px', fontWeight: 500, color: 'var(--et-ink)' }}>{name}</p>
+                      <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--et-placeholder)' }}>
+                        {weight === 3 ? 'A lot' : weight === 2 ? 'Some' : 'A bit'}
+                      </p>
+                    </div>
+                    <div style={{ height: 5, background: 'var(--et-ground)', borderRadius: 4, overflow: 'hidden' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${weight === 3 ? 100 : weight === 2 ? 66 : 33}%` }}
+                        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.08 * i }}
+                        style={{ height: '100%', background: 'linear-gradient(90deg, var(--et-match-from), var(--et-match-to))', borderRadius: 4 }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          ) : (
+            <AddTile
+              label="Pick what you're interested in"
+              hint="Moves the jobs you'd actually enjoy to the top of the feed."
+              onClick={toOnboarding}
+            />
+          )}
+        </div>
 
-        {/* ── Delete account (App Store 5.1.1(v)) ── */}
-        <DeleteAccountSection />
+        {/* ── Skills ── */}
+        <div>
+          <SectionHead icon="spark" title="What you can do" action="Edit" onAction={toOnboarding} />
+          {skills.length > 0 ? (
+            <Panel>
+              <div className="flex flex-wrap gap-2">
+                {skills.map((s) => (
+                  <span key={s} className="pill">{s}</span>
+                ))}
+              </div>
+            </Panel>
+          ) : (
+            <AddTile
+              label="Add a few things you're good at"
+              hint="Counts even if you learned it at home. Most teens undersell this one."
+              onClick={toOnboarding}
+            />
+          )}
+        </div>
 
-        {/* ── Legal links ── */}
-        <div className="flex justify-center gap-4" style={{ marginTop: 16, paddingBottom: 8 }}>
+        {/* ── Resume ── */}
+        <div>
+          <SectionHead icon="doc" title="Resume" />
+          {profile.resume_url ? (
+            <a href={String(profile.resume_url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+              <Panel style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--et-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="var(--et-blue)" aria-hidden="true">
+                    <path d="M5 2.6h5l3.6 3.6v9.2H5Z" strokeWidth="1.6" strokeLinejoin="round" />
+                    <path d="M10 2.6v3.6h3.6" strokeWidth="1.6" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--et-ink)' }}>Your resume is ready</p>
+                  <p style={{ fontSize: '12px', color: 'var(--et-blue)', marginTop: 1 }}>Tap to open</p>
+                </div>
+              </Panel>
+            </a>
+          ) : (
+            <AddTile
+              label="Build a resume"
+              hint="The coach writes one from what is already on this page. Takes a minute."
+              onClick={() => router.push('/career')}
+            />
+          )}
+        </div>
+
+        {/* ── Account ── */}
+        <div>
+          <SectionHead icon="shield" title="Account" />
+          <div className="flex flex-col gap-2">
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSignOut}
+              style={{
+                width: '100%', height: 46, borderRadius: 14,
+                background: 'var(--et-surface)', border: '1px solid var(--et-border-mid)',
+                fontSize: '14px', fontWeight: 600, color: 'var(--et-subtle)', cursor: 'pointer',
+              }}
+            >
+              Sign out
+            </motion.button>
+            <DeleteAccountSection />
+          </div>
+        </div>
+
+        <div className="flex justify-center gap-4" style={{ paddingBottom: 8 }}>
           <a href="/privacy" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Privacy</a>
           <a href="/terms" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Terms</a>
           <a href="/support" style={{ fontSize: '11px', color: 'var(--et-placeholder)' }}>Support</a>
@@ -518,7 +453,6 @@ function DeleteAccountSection() {
         setDeleting(false)
         return
       }
-      // Account is gone server-side; clear the local session and leave
       const supabase = createClient()
       await supabase.auth.signOut().catch(() => { /* session already invalid */ })
       window.location.href = '/'
@@ -533,7 +467,7 @@ function DeleteAccountSection() {
       <button
         onClick={() => setConfirming(true)}
         style={{
-          width: '100%', marginTop: 10, padding: '10px 0', background: 'none',
+          width: '100%', padding: '10px 0', background: 'none',
           border: 'none', fontSize: '12px', color: 'var(--et-placeholder)',
           cursor: 'pointer', textDecoration: 'underline',
         }}
@@ -545,8 +479,10 @@ function DeleteAccountSection() {
 
   return (
     <div
-      className="card px-4 py-4"
-      style={{ marginTop: 10, border: '1px solid rgba(220,38,38,0.25)', background: 'rgba(220,38,38,0.03)' }}
+      style={{
+        borderRadius: 18, padding: '15px 16px',
+        border: '1px solid rgba(220,38,38,0.25)', background: 'rgba(220,38,38,0.03)',
+      }}
     >
       <p style={{ fontSize: '14px', fontWeight: 700, color: '#B91C1C' }}>Delete your account?</p>
       <p style={{ fontSize: '13px', color: 'var(--et-subtle)', marginTop: 4, lineHeight: 1.5 }}>
@@ -559,7 +495,7 @@ function DeleteAccountSection() {
           onClick={handleDelete}
           disabled={deleting}
           style={{
-            flex: 1, height: 42, borderRadius: 'var(--radius-md)', border: 'none',
+            flex: 1, height: 42, borderRadius: 12, border: 'none',
             background: '#DC2626', color: 'white', fontSize: '13px', fontWeight: 700,
             cursor: 'pointer', opacity: deleting ? 0.6 : 1,
           }}
@@ -570,8 +506,8 @@ function DeleteAccountSection() {
           onClick={() => setConfirming(false)}
           disabled={deleting}
           style={{
-            flex: 1, height: 42, borderRadius: 'var(--radius-md)',
-            border: '1.5px solid var(--et-border-mid)', background: 'var(--et-surface)',
+            flex: 1, height: 42, borderRadius: 12,
+            border: '1px solid var(--et-border-mid)', background: 'var(--et-surface)',
             color: 'var(--et-subtle)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
           }}
         >

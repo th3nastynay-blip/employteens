@@ -79,12 +79,22 @@ export function logoForUrl(applyUrl: string, homepage?: string, _size = 128): st
   }
   if (!domain) return null
 
-  // unavatar, NOT Google. google.com/s2/favicons answers 200 with a
-  // FABRICATED letter tile when it has no icon, which is undetectable from
-  // the client and is what put a green "L" on Insomnia Cookies. It is banned
-  // from this codebase. unavatar 404s honestly, so a miss reaches OrgLogo as
-  // a real error and falls through to the designed tile.
-  return `https://unavatar.io/${domain}?fallback=false`
+  // OUR OWN ROUTE. Not Google, not unavatar, not any third party the browser
+  // talks to directly.
+  //
+  //   google.com/s2/favicons answers 200 with a FABRICATED letter tile when it
+  //   has no icon, so a miss is undetectable from the client. Banned.
+  //
+  //   unavatar 404s honestly, which is better, but it rate-limits per CLIENT IP
+  //   at roughly 30 requests an hour. This page renders 31 cards, so one load
+  //   spent a teen's entire quota and the rest of the list came back 429. That
+  //   is the "logos are inconsistent" bug, and it was deterministic.
+  //
+  // /api/logo fetches server-side from Vercel and the CDN caches the bytes for
+  // a year: ~31 upstream fetches in total rather than 31 per visitor. It also
+  // prefers the site's own apple-touch-icon, which is the real logo at 180px
+  // instead of a 16px favicon. See app/api/logo/route.ts.
+  return `/api/logo?d=${encodeURIComponent(domain)}`
 }
 
 /** Is this entry's application window open in the given month? */

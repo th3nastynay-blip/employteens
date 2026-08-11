@@ -158,8 +158,14 @@ export function logoSources(brand: Brand, _size = 128): string[] {
   // cache lifetime, and it either exists or the build is broken.
   if (local) return [`/logos/${brand.slug}.${local}?v=${LOGO_VERSION}`]
 
-  // Only brands with no file of their own reach the network.
-  return [`https://unavatar.io/${brand.domain}?fallback=false`]
+  // Brands with no file of their own go through OUR proxy, never straight to a
+  // third party. unavatar answers 429 after ~30 requests per client IP, so a
+  // page rendering 31 tiles burned one visitor's whole hourly quota and the
+  // tail of the list fell back to initials. Deterministic, not flaky, and worse
+  // with every row we add. /api/logo fetches server-side once and the CDN holds
+  // it for a year, so there is no per-user quota because there is no per-user
+  // request. See app/api/logo/route.ts.
+  return [`/api/logo?d=${encodeURIComponent(brand.domain)}`]
 }
 
 /** Bump when logo files change, to defeat cached 404s. */

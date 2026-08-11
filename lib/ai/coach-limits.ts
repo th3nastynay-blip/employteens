@@ -20,13 +20,16 @@ import { createClient } from '@supabase/supabase-js'
 /**
  * Messages per user per UTC day.
  *
- * Set from what a real session costs rather than a round number: a teen working
- * through a resume with the coach sends roughly 15-25 turns, and every support
- * conversation worth having fits well inside 40. Past that it is either abuse or
- * someone using the coach as a general-purpose chatbot, neither of which we are
- * paying Opus rates for. Overridable without a deploy.
+ * 150 is sized for the model actually in use. It was 40, which was correct when
+ * the plan was Opus at $5/$25 per million tokens; on Groq's llama-3.3-70b at
+ * $0.59/$0.79 the same cap throttles real users to save fractions of a cent.
+ * A teen working through a resume sends 15-25 turns and a long session might
+ * double that, so 150 stops a script without ever touching a person.
+ *
+ * Raise ANTHROPIC_API_KEY into the environment and this wants to come back
+ * down — the cap and the model have to be set together.
  */
-export const COACH_DAILY_LIMIT = Number(process.env.COACH_DAILY_LIMIT ?? 40)
+export const COACH_DAILY_LIMIT = Number(process.env.COACH_DAILY_LIMIT ?? 150)
 
 /** Warn the teen while they can still plan around it, not at zero. */
 export const COACH_WARN_AT = 8

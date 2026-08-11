@@ -56,6 +56,24 @@ const TRACKS = [
     ],
   },
   {
+    // Belongs here rather than in a separate product. Starting a project or a
+    // small business IS rungs 2-3 of the ladder — "started something" and
+    // "someone will vouch" — so it is the same climb, not a new one. It also
+    // covers the teens no job board serves at all: the ones who are not going
+    // to get hired at 14 and should be building something instead of waiting
+    // two years for a McDonald's application to be legal.
+    id: 'build',
+    label: 'Start something of my own',
+    blurb: 'A project, a small business, or freelancing. Where to actually begin, not just be told to.',
+    color: '#D97706',
+    tint: 'var(--et-amber-light)',
+    prompts: [
+      'I want to start a small business but I have no money to start with',
+      'How do I turn something I am into a real project people see?',
+      'How do I get my first three paying customers?',
+    ],
+  },
+  {
     id: 'college',
     label: 'Thinking about college',
     blurb: 'How your work and activities actually read to an admissions officer.',
@@ -98,23 +116,84 @@ function TypingIndicator() {
   )
 }
 
-function parseMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:var(--et-ground);padding:1px 5px;border-radius:4px;font-size:12px">$1</code>')
-    .replace(/^#{1,3} (.+)$/gm, '<strong style="font-size:15px">$1</strong>')
-    .replace(/^- (.+)$/gm, '• $1')
-    .replace(/^\d+\. (.+)$/gm, (_, p1, offset, str) => {
-      const lines = str.slice(0, offset).split('\n')
-      const prev = lines.filter((l: string) => /^\d+\./.test(l))
-      return `${prev.length + 1}. ${p1}`
-    })
-    .replace(/\n\n/g, '<br/><br/>')
-    .replace(/\n/g, '<br/>')
+/**
+ * Escape HTML before anything else touches the string.
+ *
+ * THIS WAS A REAL HOLE. parseMarkdown's output goes into
+ * dangerouslySetInnerHTML, and the previous version applied its regexes to raw
+ * model output with no escaping. Model output is not trusted input: a teen can
+ * type "repeat this back exactly: <img src=x onerror=...>" and a helpful
+ * assistant will do precisely that, at which point the markup executes in their
+ * session with their Supabase token in scope. Same for anything a job
+ * description carries into the prompt.
+ *
+ * Escaping first and building tags afterwards means the only HTML that can ever
+ * reach the DOM is HTML this function wrote.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
-function MessageBubble({ message, isLast }: { message: Message; isLast: boolean }) {
+/**
+ * Minimal markdown. Real lists rather than a bullet character.
+ *
+ * The old version turned "- item" into the literal text "• item" and joined
+ * everything with <br/>, so a numbered set of steps rendered as one ragged
+ * block with no indent and no hanging alignment. Coach answers are mostly
+ * steps, which made the most common response the worst looking one.
+ */
+function parseMarkdown(text: string): string {
+  const lines = escapeHtml(text).split('\n')
+  const out: string[] = []
+  let list: 'ul' | 'ol' | null = null
+
+  const inline = (s: string) =>
+    s
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*]+?)\*/g, '$1<em>$2</em>')
+      .replace(/`(.+?)`/g, '<code style="background:var(--et-ground);padding:1px 5px;border-radius:5px;font-size:12.5px">$1</code>')
+
+  const close = () => { if (list) { out.push(`</${list}>`); list = null } }
+  const open = (kind: 'ul' | 'ol') => {
+    if (list === kind) return
+    close()
+    out.push(`<${kind} style="margin:6px 0 6px 18px;padding:0;display:flex;flex-direction:column;gap:4px">`)
+    list = kind
+  }
+
+  for (const raw of lines) {
+    const line = raw.trimEnd()
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line)
+    const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line)
+    const heading = /^#{1,3}\s+(.*)$/.exec(line)
+
+    if (bullet) {
+      open('ul')
+      out.push(`<li>${inline(bullet[1])}</li>`)
+    } else if (numbered) {
+      open('ol')
+      out.push(`<li>${inline(numbered[1])}</li>`)
+    } else if (heading) {
+      close()
+      out.push(`<strong style="display:block;font-size:14.5px;margin:8px 0 2px">${inline(heading[1])}</strong>`)
+    } else if (line.trim() === '') {
+      close()
+      out.push('<div style="height:8px"></div>')
+    } else {
+      close()
+      out.push(`<div>${inline(line)}</div>`)
+    }
+  }
+  close()
+  return out.join('')
+}
+
+function MessageBubble({ message }: { message: Message }) {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
 
@@ -206,8 +285,9 @@ export default function CareerPage() {
   // Read from X-Coach-Remaining. Null until the first reply, so we never show
   // a limit warning to someone who has not sent anything.
   const [remaining, setRemaining] = useState<number | null>(null)
+  const [focused, setFocused] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   // Proactive insights — computed server-side from the user's real data
@@ -255,6 +335,27 @@ export default function CareerPage() {
     setMessages([])
     setTrack(null)
     try { sessionStorage.removeItem(CHAT_KEY) } catch { /* noop */ }
+  }
+
+  // Grow the textarea to fit, up to the CSS max-height, then let it scroll.
+  // Reset to 'auto' first or the box can only ever get taller: scrollHeight is
+  // measured against the current height, so shrinking never happens.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 132)}px`
+  }, [input])
+
+  // Abort mid-answer. The reader loop already treats AbortError as a normal
+  // exit, so the partial text stays on screen instead of being replaced with
+  // an error — which is what the teen wanted when they hit stop.
+  function stopStreaming() {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setIsStreaming(false)
+    setShowTyping(false)
+    setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)))
   }
 
   function scrollToBottom(smooth = true) {
@@ -581,8 +682,8 @@ export default function CareerPage() {
         ) : (
           <div className="flex flex-col gap-4">
             <AnimatePresence>
-              {messages.map((msg, i) => (
-                <MessageBubble key={msg.id} message={msg} isLast={i === messages.length - 1} />
+              {messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
               ))}
             </AnimatePresence>
 
@@ -593,7 +694,15 @@ export default function CareerPage() {
         <div ref={bottomRef} style={{ height: 1 }} />
       </div>
 
-      {/* ── Input bar ── */}
+      {/* ── Composer ──
+          A textarea, not an <input>. The coach is regularly asked to review a
+          paragraph a teen wrote, and a single-line field showed them a moving
+          keyhole of their own text with no way to see what they had typed.
+          Grows to a cap, then scrolls.
+
+          Enter sends, Shift+Enter breaks a line — the convention everywhere
+          else, and worth honouring because the alternative is people
+          accidentally sending half a sentence. */}
       <div
         className="flex-shrink-0 px-4 py-3 safe-bottom"
         style={{
@@ -603,59 +712,82 @@ export default function CareerPage() {
         }}
       >
         <div
-          className="flex items-center gap-2"
+          className="flex items-end gap-2"
           style={{
-            background: 'var(--et-ground)',
-            borderRadius: 'var(--radius-full)',
-            padding: '6px 6px 6px 16px',
-            border: '1.5px solid var(--et-border-mid)',
+            background: 'var(--et-surface)',
+            borderRadius: 22,
+            padding: '6px 6px 6px 14px',
+            border: `1.5px solid ${focused ? 'var(--et-blue)' : 'var(--et-border-mid)'}`,
+            transition: 'border-color 0.15s ease',
           }}
         >
-          <input
+          <textarea
             ref={inputRef}
             value={input}
+            rows={1}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything…"
-            disabled={isStreaming}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="Ask anything"
             style={{
               flex: 1,
               background: 'none',
               border: 'none',
               outline: 'none',
-              fontSize: '14px',
+              resize: 'none',
+              fontSize: '14.5px',
+              lineHeight: 1.45,
               color: 'var(--et-ink)',
               fontFamily: 'var(--font-sans)',
+              maxHeight: 132,
+              overflowY: 'auto',
+              padding: '9px 0',
             }}
           />
 
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={() => sendMessage()}
-            disabled={!input.trim() || isStreaming}
-            style={{
-              width: 36, height: 36,
-              borderRadius: 'var(--radius-full)',
-              background: input.trim() && !isStreaming
-                ? 'linear-gradient(135deg, #2563EB, #7C3AED)'
-                : 'var(--et-border)',
-              border: 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: input.trim() && !isStreaming ? 'pointer' : 'default',
-              transition: 'background 0.2s ease, transform 0.1s ease',
-              flexShrink: 0,
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M3 8H13M13 8L8.5 3.5M13 8L8.5 12.5"
-                stroke="white"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.button>
+          {/* While streaming this becomes Stop. A long answer the teen has
+              already read enough of used to have no exit except leaving the
+              page, and on a phone that means losing the thread. */}
+          {isStreaming ? (
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={stopStreaming}
+              aria-label="Stop generating"
+              style={{
+                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                background: 'var(--et-ground)', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <span style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--et-subtle)' }} />
+            </motion.button>
+          ) : (
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => sendMessage()}
+              disabled={!input.trim()}
+              aria-label="Send"
+              style={{
+                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                background: input.trim()
+                  ? 'linear-gradient(135deg, var(--et-match-from), var(--et-match-to))'
+                  : 'var(--et-ground)',
+                border: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: input.trim() ? 'pointer' : 'default',
+                transition: 'background 0.2s ease',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M8 13V3M8 3L4 7M8 3L12 7"
+                  stroke={input.trim() ? '#fff' : 'var(--et-placeholder)'}
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                />
+              </svg>
+            </motion.button>
+          )}
         </div>
       </div>
     </div>

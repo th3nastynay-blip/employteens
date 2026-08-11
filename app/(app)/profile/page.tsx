@@ -13,6 +13,7 @@ import {
   type WeightedInterest,
 } from '@/lib/types/onboarding'
 import type { UserProfile } from '@/lib/types/database'
+import { ProfileHeader, type ProfileStep } from '@/components/profile/ProfileHeader'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -260,17 +261,45 @@ export default function ProfilePage() {
   const primaryTransport = transports[0]
   const primaryTransportOption = TRANSPORTATION_OPTIONS.find((o) => o.value === primaryTransport)
 
-  return (
-    <div className="flex flex-col pb-8">
+  // The facts that gate what a teen can even be shown. Stated once, at the
+  // top, rather than buried across five sections further down the page.
+  const attributes = [
+    profile.age ? `Age ${profile.age}` : null,
+    gradeLabel ? String(gradeLabel) : null,
+    profile.state ? `${profile.state} ${profile.zip_code ?? ''}`.trim() : null,
+    primaryTransport ? TRANSPORTATION_OPTIONS.find((t) => t.value === primaryTransport)?.label ?? null : null,
+    availableDays.length > 0 ? `${availableDays.length} days free` : null,
+  ].filter((x): x is string => Boolean(x))
 
-      {/* ── Header ── */}
-      <div className="px-5 pt-safe-header pb-6">
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontSize: '13px', color: 'var(--et-muted)', fontWeight: 500 }}>
-          Your career profile
-        </motion.p>
-        <motion.h1 initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }} className="text-h1" style={{ color: 'var(--et-ink)', marginTop: 3 }}>
-          {profile.name}
-        </motion.h1>
+  // One circle per thing we actually need. `done` is derived from the data,
+  // never asserted — an empty array is not a completed step.
+  const steps: ProfileStep[] = [
+    { id: 'basics', label: 'Basics', done: Boolean(profile.name && profile.age) },
+    { id: 'location', label: 'Location', done: Boolean(profile.zip_code) },
+    { id: 'school', label: 'School', done: Boolean(profile.school_grade) },
+    { id: 'availability', label: 'Availability', done: availableDays.length > 0 },
+    { id: 'transport', label: 'Transport', done: transports.length > 0 },
+    { id: 'interests', label: 'Interests', done: interests.length > 0 },
+    { id: 'skills', label: 'Skills', done: skills.length > 0 },
+    { id: 'resume', label: 'Resume', done: Boolean(profile.resume_url) },
+  ]
+
+  return (
+    <div className="flex flex-col pb-nav">
+
+      {/* ── Header ──
+          Rebuilt on the Appybara reference: attribute row, then identity, then
+          a numbered stepper. See components/profile/ProfileHeader.tsx for what
+          we took from it and what we deliberately did not. */}
+      <div className="pt-safe-header pb-2">
+        <ProfileHeader
+          name={profile.name}
+          attributes={attributes}
+          steps={steps}
+          savedCount={savedCount}
+          appliedCount={appliedCount}
+          onStep={() => router.push('/onboarding')}
+        />
       </div>
 
       <div className="px-4 flex flex-col gap-4">

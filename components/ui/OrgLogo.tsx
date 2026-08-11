@@ -8,10 +8,8 @@
  * we shipped Google's placeholder globe rather than admitting it.
  *
  * A placeholder that repeats across a whole list is worse than no image — it
- * reads as unfinished. So the fallback here is a monogram: the org's initials
- * on a colour derived from its own name. Deterministic, so DOROT is always the
- * same green and Sloan Kettering always the same blue, which over time works
- * like a real logo does — you recognise it before you read it.
+ * reads as unfinished. So the fallback is a monogram in ONE quiet treatment,
+ * inside the same tile a real logo would occupy.
  *
  * The favicon route also fails LOUDLY now. Google's service returns HTTP 200
  * with a globe rather than a 404, so `onError` never fires and we cannot
@@ -22,22 +20,21 @@
  */
 
 import { useState } from 'react'
+import { domainForCompany } from '@/lib/jobs/company-domain'
 
-const PALETTE = [
-  ['#2563EB', '#7C3AED'], // brand blue → purple
-  ['#0891B2', '#2563EB'], // cyan → blue
-  ['#7C3AED', '#DB2777'], // purple → pink
-  ['#059669', '#0891B2'], // green → cyan
-  ['#D97706', '#DB2777'], // amber → pink
-  ['#4F46E5', '#0891B2'], // indigo → cyan
-]
-
-/** Stable hash so an org keeps its colour across sessions and devices. */
-function hashOf(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
+/**
+ * ONE monogram treatment, not six.
+ *
+ * This used to pick from six gradients by name hash, on the theory that a
+ * consistent colour per org helps recognition. In a feed where NOTHING has a
+ * real logo — job rows have never had logo_url populated — that produced forty
+ * randomly coloured tiles in a column, which reads as broken rather than as a
+ * system. The colour was carrying no information; it was just noise with a
+ * stable seed.
+ *
+ * A single quiet treatment lets the real logos be the thing that varies, which
+ * is the only variation that means anything.
+ */
 
 /**
  * Initials from the org name. Two letters max, and stop-words are dropped so
@@ -63,9 +60,17 @@ interface Props {
 
 export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
   const [failed, setFailed] = useState(false)
-  const showImage = Boolean(src) && !failed
 
-  const [from, to] = PALETTE[hashOf(name) % PALETTE.length]
+  // Fall back to deriving a domain from the company name. Job rows have no
+  // logo_url — the opportunity ingest sets it, the job pipeline never did — so
+  // without this every job card is a monogram. A wrong guess degrades to the
+  // monogram via the 32px check below, never to another company's logo.
+  const resolved = src ?? (() => {
+    const domain = domainForCompany(name)
+    return domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : null
+  })()
+
+  const showImage = Boolean(resolved) && !failed
   const initials = initialsOf(name)
 
   return (
@@ -77,8 +82,11 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
         flexShrink: 0,
         overflow: 'hidden',
         position: 'relative',
-        background: showImage ? 'var(--et-surface)' : `linear-gradient(135deg, ${from}, ${to})`,
-        border: showImage ? '1px solid var(--et-border)' : 'none',
+        // Identical container whether or not a logo resolved. Mixed real
+        // logos and monograms only look deliberate if the TILE is constant and
+        // the contents vary, rather than the other way round.
+        background: 'var(--et-surface)',
+        border: '1px solid var(--et-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -88,7 +96,7 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src as string}
+          src={resolved as string}
           alt=""
           width={size}
           height={size}
@@ -111,9 +119,9 @@ export function OrgLogo({ src, name, size = 48, radius = 12 }: Props) {
         <span
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: Math.round(size * 0.38),
+            fontSize: Math.round(size * 0.36),
             fontWeight: 800,
-            color: '#fff',
+            color: 'var(--et-placeholder)',
             letterSpacing: '-0.02em',
             lineHeight: 1,
           }}

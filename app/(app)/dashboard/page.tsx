@@ -56,6 +56,8 @@ export default function DashboardPage() {
     high_probability: [],
   })
   const [totalCount, setTotalCount] = useState(0)
+  // Held so FeedSection can compute per-teen fit factors on the client.
+  const [profile, setProfile] = useState<UserProfile | null>(null)
 
   useEffect(() => {
     // Animate scan text while data loads
@@ -96,6 +98,7 @@ export default function DashboardPage() {
       setUserAge(profileRes.data.age)
     }
     setHasPapers((profileRes.data?.has_working_papers as boolean | null) ?? null)
+    if (profileRes.data) setProfile(profileRes.data as unknown as UserProfile)
 
     if (applicationsRes.data) {
       setSavedJobs(applicationsRes.data.map((a: { job_id: string }) => a.job_id))
@@ -374,6 +377,7 @@ export default function DashboardPage() {
                 jobs={jobs[activeTab]}
                 savedJobs={savedJobs}
                 onSave={handleSave}
+                profile={profile}
                 emptyState={
                   activeTab === 'best_matches'
                     ? totalCount === 0

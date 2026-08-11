@@ -7,63 +7,78 @@ import { recordApplyClick } from '@/lib/apply-tracking'
 import { visibleTags } from '@/lib/jobs/quality-score'
 import { OrgLogo } from '@/components/ui/OrgLogo'
 import type { JobMatch } from '@/lib/types/database'
+import type { FitFactor } from '@/lib/ai/match-engine'
 
 interface JobCardProps {
   job: JobMatch
   onSave?: (id: string) => void
   isSaved?: boolean
   index?: number
+  /**
+   * Computed by the caller, which is the only place the user profile exists.
+   * Absent (saved list, tracker) means we simply do not show a fit ring rather
+   * than showing a number we cannot justify.
+   */
+  fit?: FitFactor[]
 }
 
-function getMatchLabel(score: number): string {
-  if (score >= 93) return 'Perfect Match'
-  if (score >= 85) return 'Great Match'
-  if (score >= 75) return 'Good Match'
-  return 'Possible Match'
-}
 
 /**
- * The ring stays on JOBS and deliberately does not exist on opportunities.
- * A job is genuinely scored against schedule, commute and age, so a percentage
- * is real precision. An opportunity is not scored against anything, and a ring
- * there would be decoration pretending to be a measurement.
+ * FIT RING — segments, not a percentage.
  *
- * Shrunk from 72 to 52 so the employer's logo can take the leading position.
- * The teen recognises "Chipotle" before they read "91%".
+ * This was a continuous arc showing match_score. See fitFactors() in
+ * lib/ai/match-engine.ts for why that number was the wrong thing to show: a
+ * quarter of it measured the employer rather than the fit, and 91 vs 84 was a
+ * distinction no teen could act on.
+ *
+ * One segment per factor, filled when it passes. The reading is "4 of 5",
+ * which is countable off the ring itself without reading the label, and every
+ * segment maps to a sentence we can defend.
  */
-function MatchRing({ score }: { score: number }) {
+function FitRing({ factors }: { factors: FitFactor[] }) {
+  const size = 52
   const r = 21
+  const c = size / 2
   const circ = 2 * Math.PI * r
-  const offset = circ - (score / 100) * circ
+  const n = factors.length
+  const gap = 5
+  const seg = circ / n - gap
+  const passed = factors.filter((f) => f.ok).length
 
   return (
-    <div className="relative flex-shrink-0" style={{ width: 52, height: 52 }}>
-      <svg width="52" height="52" viewBox="0 0 52 52" style={{ transform: 'rotate(-90deg)' }}>
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
         <defs>
-          <linearGradient id={`mg${score}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop stopColor="#2563EB" />
-            <stop offset="1" stopColor="#7C3AED" />
+          <linearGradient id="fitgrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop stopColor="var(--et-match-from)" />
+            <stop offset="1" stopColor="var(--et-match-to)" />
           </linearGradient>
         </defs>
-        <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(37,99,235,0.10)" strokeWidth="5" />
-        <motion.circle
-          cx="26" cy="26" r={r}
-          fill="none"
-          stroke={`url(#mg${score})`}
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeDasharray={circ}
-          initial={{ strokeDashoffset: circ }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
-        />
+        {factors.map((f, i) => (
+          <motion.circle
+            key={f.key}
+            cx={c} cy={c} r={r}
+            fill="none"
+            stroke={f.ok ? 'url(#fitgrad)' : 'var(--et-border-mid)'}
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray={`${seg} ${circ - seg}`}
+            strokeDashoffset={-(i * (circ / n))}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 + i * 0.06, duration: 0.25 }}
+          />
+        ))}
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
           className="match-gradient-text"
-          style={{ fontFamily: 'var(--font-display)', fontSize: '13.5px', fontWeight: 800, lineHeight: 1 }}
+          style={{ fontFamily: 'var(--font-display)', fontSize: '15px', fontWeight: 800, lineHeight: 1 }}
         >
-          {score}%
+          {passed}
+        </span>
+        <span style={{ fontSize: '8.5px', color: 'var(--et-placeholder)', fontWeight: 700, lineHeight: 1, marginTop: 1 }}>
+          of {n}
         </span>
       </div>
     </div>
@@ -82,7 +97,7 @@ function parseReasons(explanation: string): string[] {
   return parts.slice(0, 4)
 }
 
-export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
+export function JobCard({ job, onSave, isSaved, index = 0, fit }: JobCardProps) {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
@@ -134,8 +149,6 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
       // Non-critical — don't block the apply action
     }
   }
-
-  const matchLabel = getMatchLabel(job.match_score)
   const hiresfast = job.hiring_speed_score >= 80
   const reasons = parseReasons(job.match_explanation)
   // Last-resort guard against unit-mismatched salary data reaching a real
@@ -218,7 +231,11 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
           </p>
 
           <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 8 }}>
-            <span className="pill pill-blue">{matchLabel}</span>
+            {fit && fit.length > 0 && (
+              <span className={fit.every((f) => f.ok) ? 'pill pill-green' : 'pill pill-blue'}>
+                {fit.filter((f) => f.ok).length} of {fit.length} fit
+              </span>
+            )}
             {isProgram && <span className="pill pill-blue">City program</span>}
             {isHumanContact && (
               <span className="pill pill-blue">
@@ -230,7 +247,7 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
           </div>
         </div>
 
-        <MatchRing score={job.match_score} />
+        {fit && fit.length > 0 && <FitRing factors={fit} />}
       </div>
 
       {/* ── Why this matches you ── */}
@@ -245,7 +262,7 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
         >
           <div className="flex items-center justify-between">
             <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--et-placeholder)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Why this matches you
+              {fit && fit.length > 0 ? 'How it fits you' : 'Why this matches you'}
             </p>
             <svg
               width="14" height="14" viewBox="0 0 14 14" fill="none"
@@ -260,7 +277,37 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
           </div>
         </button>
 
-        {/* Always show first reason, expand shows rest */}
+        {/* THE FAILED FACTORS COME FIRST.
+            The old block listed only positives — every card was a row of green
+            ticks agreeing with itself. The single most useful line on a job
+            card is the one thing that does NOT line up, because that is what a
+            teen has to decide about. Passing factors collapse behind the
+            expander; the mismatch does not. */}
+        {fit && fit.length > 0 ? (
+          <div className="flex flex-col gap-1.5 mt-2">
+            {[...fit].sort((a, b) => Number(a.ok) - Number(b.ok))
+              .slice(0, expanded ? fit.length : Math.max(2, fit.filter((f) => !f.ok).length))
+              .map((f) => (
+                <div key={f.key} className="flex items-start gap-2">
+                  {f.ok ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ marginTop: 1, flexShrink: 0 }}>
+                      <circle cx="7" cy="7" r="6.5" fill="var(--et-green-light)" />
+                      <path d="M4.5 7L6.2 8.8L9.5 5.5" stroke="var(--et-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ marginTop: 1, flexShrink: 0 }}>
+                      <circle cx="7" cy="7" r="6.5" fill="var(--et-surface-2)" />
+                      <path d="M7 4v4M7 10h.01" stroke="var(--et-placeholder)" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  )}
+                  <span style={{ fontSize: '13px', color: f.ok ? 'var(--et-subtle)' : 'var(--et-ink)', lineHeight: 1.4 }}>
+                    <strong style={{ fontWeight: f.ok ? 500 : 700 }}>{f.label}</strong>
+                    {!f.ok && f.note ? ` — ${f.note}` : ''}
+                  </span>
+                </div>
+              ))}
+          </div>
+        ) : (
         <div className="flex flex-col gap-1.5 mt-2">
           {(expanded ? reasons : reasons.slice(0, 2)).map((reason, i) => (
             <motion.div
@@ -278,6 +325,7 @@ export function JobCard({ job, onSave, isSaved, index = 0 }: JobCardProps) {
             </motion.div>
           ))}
         </div>
+        )}
 
         <AnimatePresence>
           {!expanded && reasons.length > 2 && (

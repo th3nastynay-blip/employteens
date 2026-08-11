@@ -1,17 +1,23 @@
 'use client'
 
-import { motion } from 'framer-motion'
 import { JobCard } from './JobCard'
-import type { JobMatch } from '@/lib/types/database'
+import { fitFactors } from '@/lib/ai/match-engine'
+import type { JobMatch, UserProfile, JobRow } from '@/lib/types/database'
 
 interface FeedSectionProps {
   jobs: JobMatch[]
   savedJobs: string[]
   onSave: (id: string) => void
   emptyState?: string
+  /**
+   * Needed to compute fit factors, which are per-teen by definition. Without
+   * it the cards render with no fit ring rather than falling back to a
+   * percentage we cannot justify — see fitFactors() in match-engine.
+   */
+  profile?: UserProfile | null
 }
 
-export function FeedSection({ jobs, savedJobs, onSave, emptyState }: FeedSectionProps) {
+export function FeedSection({ jobs, savedJobs, onSave, emptyState, profile }: FeedSectionProps) {
   if (jobs.length === 0) {
     return (
       <div
@@ -44,6 +50,7 @@ export function FeedSection({ jobs, savedJobs, onSave, emptyState }: FeedSection
           onSave={onSave}
           isSaved={savedJobs.includes(job.id)}
           index={i}
+          fit={profile ? fitFactors(profile, job as unknown as JobRow) : undefined}
         />
       ))}
     </div>

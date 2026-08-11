@@ -487,3 +487,78 @@ export function getNoMatchExplanation(user: UserProfile, section: string): strin
   }
   return `No fast-hiring employers in your area right now. Check Best Matches for strong overall fits.`
 }
+
+// ── Fit factors ───────────────────────────────────────────────────────────
+/**
+ * WHY THIS EXISTS INSTEAD OF SHOWING match_score.
+ *
+ * match_score is a weighted blend of six sub-scores, and two of them —
+ * employer_quality and urgency — are properties of the JOB, not of the fit
+ * between this teen and this job. employer_quality is teen-friendliness plus
+ * inverse scam risk; urgency is how recently it was posted. Folding those into
+ * a personal "91% match" means a quarter of that number is us saying "decent
+ * employer, posted Tuesday". True, and nothing to do with whether it suits
+ * them.
+ *
+ * Worse, 91 vs 84 is a difference a teen cannot act on. A percentage to the
+ * unit implies a precision we do not have — the weights were chosen by us, and
+ * nothing about them is falsifiable from a teen's side.
+ *
+ * So the card shows FACTORS instead: five yes/no checks about this teen, each
+ * one nameable, each one auditable. "4 of 5 fit" and the one that failed is
+ * the thing they actually needed to know. Employer quality and urgency stay in
+ * the feed as their own pills ("Hires fast"), where they belong.
+ */
+export interface FitFactor {
+  key: 'schedule' | 'distance' | 'age' | 'experience' | 'interest'
+  label: string
+  ok: boolean
+  /** Shown when ok is false — the specific reason, not a shrug. */
+  note?: string
+}
+
+export function fitFactors(user: UserProfile, job: JobRow): FitFactor[] {
+  const transports = deserializeTransportation(
+    typeof user.transportation === 'string' ? user.transportation : JSON.stringify(user.transportation),
+  )
+  const loc = scoreLocation(user, job, transports)
+  const schedule = scoreSchedule(user, job)
+  const interest = scoreInterests(user, job)
+  const experience = scoreExperience(user, job)
+  const ageOk = user.age === null || user.age === undefined || user.age >= job.min_age
+
+  return [
+    {
+      key: 'schedule',
+      label: 'Your hours',
+      ok: schedule >= 60,
+      note: 'May clash with when you said you are free',
+    },
+    {
+      key: 'distance',
+      label: 'Getting there',
+      ok: loc.score >= 60,
+      note: loc.miles !== null && loc.miles > 0
+        ? `About ${loc.miles.toFixed(1)} mi with how you travel`
+        : 'Further than your usual range',
+    },
+    {
+      key: 'age',
+      label: 'Your age',
+      ok: ageOk,
+      note: `Needs ${job.min_age}+`,
+    },
+    {
+      key: 'experience',
+      label: 'Experience',
+      ok: experience >= 60,
+      note: 'Asks for some experience',
+    },
+    {
+      key: 'interest',
+      label: 'What you like',
+      ok: interest >= 55,
+      note: 'Outside what you picked, which is not a dealbreaker',
+    },
+  ]
+}

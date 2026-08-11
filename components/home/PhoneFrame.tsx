@@ -30,13 +30,60 @@
 
 import { motion } from 'framer-motion'
 
+/**
+ * The app's own tab bar, miniaturised.
+ *
+ * Added because the first build left each screen's content floating in the top
+ * half of a 396px frame with 180px of blank white under it, which reads as an
+ * unfinished screen rather than a spacious one. A tab bar anchors the bottom,
+ * fills the space with something true (the app really does have five tabs), and
+ * tells a first-time visitor how big the product is without a word of copy.
+ */
+function MiniTabBar({ active }: { active: number }) {
+  // Five glyphs at 11px. Simplified to single strokes because detail at this
+  // size turns to mud.
+  const icons = [
+    'M2 3.5h3.4v3.4H2ZM7.6 3.5H11v3.4H7.6ZM2 9.1h3.4v3.4H2ZM7.6 9.1H11v3.4H7.6Z',
+    'M6.5 1.6 11.4 6.5 6.5 11.4 1.6 6.5Z',
+    'M3.2 1.8h6.6v9.6L6.5 9.6 3.2 11.4Z',
+    'M6.5 1.8a4.7 4.7 0 1 1 0 9.4 4.7 4.7 0 0 1 0-9.4Zm0 2.6v2.5l1.8 1.1',
+    'M6.5 1.8a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8ZM1.9 11.4c0-2.3 2.1-3.6 4.6-3.6s4.6 1.3 4.6 3.6',
+  ]
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        borderTop: '1px solid var(--et-border)',
+        background: 'rgba(255,255,255,0.92)',
+        padding: '7px 8px 10px',
+        display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+      }}
+    >
+      {icons.map((d, i) => (
+        <svg
+          key={i}
+          width="13" height="13" viewBox="0 0 13 13" fill="none"
+          stroke={i === active ? 'var(--et-blue)' : 'var(--et-placeholder)'}
+          strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d={d} />
+        </svg>
+      ))}
+    </div>
+  )
+}
+
 export function PhoneFrame({
   caption,
   index,
+  activeTab,
   children,
 }: {
   caption: string
   index: number
+  /** Which of the five tabs this screen lives under. */
+  activeTab: number
   children: React.ReactNode
 }) {
   return (
@@ -69,7 +116,7 @@ export function PhoneFrame({
             borderRadius: 27,
             overflow: 'hidden',
             background: 'var(--et-surface)',
-            height: 396,
+            height: 356,
             position: 'relative',
             display: 'flex',
             flexDirection: 'column',
@@ -83,6 +130,7 @@ export function PhoneFrame({
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '10px 12px 0' }}>
             {children}
           </div>
+          <MiniTabBar active={activeTab} />
         </div>
       </div>
     </motion.div>

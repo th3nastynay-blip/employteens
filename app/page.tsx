@@ -47,10 +47,10 @@ function LogoMark() {
 }
 
 const STEPS = [
-  { caption: 'Tell us your hours', screen: <ScreenAvailability /> },
-  { caption: 'See what fits', screen: <ScreenFeed /> },
-  { caption: 'Know where you stand', screen: <ScreenLadder /> },
-  { caption: 'Get someone to vouch', screen: <ScreenVouch /> },
+  { caption: 'Tell us your hours', tab: 4, screen: <ScreenAvailability /> },
+  { caption: 'See what fits', tab: 0, screen: <ScreenFeed /> },
+  { caption: 'Know where you stand', tab: 4, screen: <ScreenLadder /> },
+  { caption: 'Get someone to vouch', tab: 4, screen: <ScreenVouch /> },
 ]
 
 export default function HomePage() {
@@ -87,11 +87,15 @@ export default function HomePage() {
           padding: '52px 24px 0', textAlign: 'center',
         }}
       >
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease }}
-        >
+        {/* NOT wrapped in motion, and that is deliberate.
+            `initial={{opacity:0}}` renders the hero invisible and depends on JS
+            to reveal it. On the one page whose entire job is a first
+            impression, that means a blank screen for anyone on a slow
+            connection, with JS blocked, or on a crawler generating a link
+            preview — the headline is also the SEO and social-card text. The
+            rotating headline supplies plenty of motion once JS arrives; the
+            words themselves are visible from first paint either way. */}
+        <div>
           <RotatingHeadline />
           <p
             style={{
@@ -102,12 +106,9 @@ export default function HomePage() {
             Part-time jobs in Hudson County and NYC, filtered by what you are actually
             old enough and free enough to do.
           </p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease, delay: 0.12 }}
+        <div
           style={{ marginTop: 28, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}
         >
           <Link href="/signup" style={{ textDecoration: 'none' }}>
@@ -135,19 +136,14 @@ export default function HomePage() {
               I have an account
             </button>
           </Link>
-        </motion.div>
+        </div>
 
         {/* The only number on this page, and only when it is real. */}
         {stats && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            style={{ marginTop: 18, fontSize: '12.5px', color: 'var(--et-placeholder)' }}
-          >
+          <p style={{ marginTop: 18, fontSize: '12.5px', color: 'var(--et-placeholder)' }}>
             {stats.active_jobs} openings live right now
             {stats.verified_today > 0 ? ` · ${stats.verified_today} link-checked today` : ''}
-          </motion.p>
+          </p>
         )}
       </section>
 
@@ -166,7 +162,7 @@ export default function HomePage() {
           } as React.CSSProperties}
         >
           {STEPS.map((s, i) => (
-            <PhoneFrame key={s.caption} caption={s.caption} index={i}>
+            <PhoneFrame key={s.caption} caption={s.caption} index={i} activeTab={s.tab}>
               {s.screen}
             </PhoneFrame>
           ))}

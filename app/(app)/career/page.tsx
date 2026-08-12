@@ -2,7 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import { ChatHistory } from '@/components/career/ChatHistory'
+import { AIConsent } from '@/components/coach/AIConsent'
+import { createClient } from '@/lib/supabase/client'
 import {
   createConversation,
   appendMessage,
@@ -279,6 +282,7 @@ interface Insight {
 }
 
 export default function CareerPage() {
+  const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -292,6 +296,9 @@ export default function CareerPage() {
   // a limit warning to someone who has not sent anything.
   const [remaining, setRemaining] = useState<number | null>(null)
   const [focused, setFocused] = useState(false)
+  // null = still checking. Rendering the consent card before we know would
+  // flash it at teens who agreed months ago.
+  const [consented, setConsented] = useState<boolean | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   // Bumped after every save so the drawer refetches its list.
   const [historyKey, setHistoryKey] = useState(0)
@@ -303,6 +310,44 @@ export default function CareerPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Has this teen agreed to third-party AI? Guideline 5.1.2(i). The server
+  // enforces it too — see app/api/career-ai/route.ts — this is only so the UI
+  // asks rather than letting them type into a dead box.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setConsented(false); return }
+        const { data } = await supabase
+          .from('users').select('ai_consent_at').eq('id', user.id).single()
+        setConsented(Boolean((data as { ai_consent_at?: string | null } | null)?.ai_consent_at))
+      } catch {
+        // Column missing (migration not run) or network failure. Ask again:
+        // showing the consent card one extra time is harmless, sending data
+        // without consent is not.
+        setConsented(false)
+      }
+    })()
+  }, [])
+
+  const acceptAI = useCallback(async () => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      await supabase
+        .from('users')
+        .update({ ai_consent_at: new Date().toISOString(), ai_consent_version: 'groq-llama-3.3-v1' })
+        .eq('id', user.id)
+      setConsented(true)
+    } catch {
+      // If we cannot record it we must not proceed — the server will refuse
+      // anyway, and pretending otherwise would send them into a dead coach.
+      setConsented(false)
+    }
+  }, [])
 
   // Proactive insights — computed server-side from the user's real data
   useEffect(() => {
@@ -624,7 +669,16 @@ export default function CareerPage() {
         className="flex-1 overflow-y-auto scrollbar-hide px-4"
         style={{ paddingTop: 16, paddingBottom: 8 }}
       >
-        {isEmpty ? (
+        {consented === false ? (
+          /* Guideline 5.1.2(i): explicit permission before any personal data
+             reaches the AI provider. Replaces the whole chat surface rather
+             than sitting as a dismissible banner above it — a teen must not be
+             able to type into a box that is going to refuse them. */
+          <AIConsent
+            onAccept={acceptAI}
+            onDecline={() => router.push('/dashboard')}
+          />
+        ) : isEmpty ? (
           /* ── Empty state ──
              Three tracks instead of a flat prompt list. See TRACKS at the top
              of this file for why: a list of five resume prompts silently tells
@@ -779,6 +833,8 @@ export default function CareerPage() {
         refreshKey={historyKey}
       />
 
+      {consented !== true ? null : (
+      <>
       {/* ── Composer ──
           A textarea, not an <input>. The coach is regularly asked to review a
           paragraph a teen wrote, and a single-line field showed them a moving
@@ -875,6 +931,8 @@ export default function CareerPage() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

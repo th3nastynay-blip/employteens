@@ -68,6 +68,38 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // ── Consent gate, before anything leaves our infrastructure ──
+  //
+  // Guideline 5.1.2(i) requires explicit permission before sharing personal
+  // data with third-party AI. Checked HERE, not in the client, because this
+  // route is what calls the provider: a client-side check is a suggestion, and
+  // clearing localStorage would be enough to bypass it and start shipping a
+  // minor's profile to a third party with no consent on file.
+  //
+  // Fails CLOSED, unlike the usage meter. If we cannot confirm consent we do
+  // not send. The meter guards a bill; this guards a 15-year-old's data going
+  // somewhere they did not agree to, and the safe default is opposite.
+  try {
+    const supabase = await createClient()
+    const { data: row } = await supabase
+      .from('users')
+      .select('ai_consent_at')
+      .eq('id', userId)
+      .single()
+    if (!(row as { ai_consent_at?: string | null } | null)?.ai_consent_at) {
+      return sse(
+        'Before I can help, I need your OK to send your message and some profile details to our AI provider. Tap "New chat" and the permission screen will come up.',
+        { 'X-Coach-Consent': 'required' },
+      )
+    }
+  } catch (e) {
+    console.error('[AI Coach] consent check failed', e)
+    return sse(
+      "I could not check your AI permission just now, so I have not sent anything. Try again in a moment.",
+      { 'X-Coach-Consent': 'unknown' },
+    )
+  }
+
   // ── Meter, before spending anything ──
   const usage = await bumpCoachUsage(userId, Math.ceil(totalChars / 4))
   if (!usage.allowed) return limitReachedStream()

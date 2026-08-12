@@ -52,6 +52,7 @@ import { ProfileHeader, type ProfileStep } from '@/components/profile/ProfileHea
 import { ReferenceCard, type ReferenceState } from '@/components/profile/ReferenceCard'
 import { LadderStrip } from '@/components/profile/LadderStrip'
 import { SectionHead, AddTile, Panel } from '@/components/profile/Section'
+import { loadResume } from '@/lib/resume/store'
 
 const DAYS = [
   { key: 'monday', short: 'M' },
@@ -101,6 +102,11 @@ export default function ProfilePage() {
   const [savedCount, setSavedCount] = useState(0)
   const [appliedCount, setAppliedCount] = useState(0)
   const [events, setEvents] = useState<LadderEvent[]>([])
+  // A user_resumes row only exists once the teen has edited something, since
+  // the resume page autosaves on first change. So "a row exists" is the same
+  // claim as "they have started it" — which is what the step should reflect,
+  // rather than the dead resume_url the old check used.
+  const [resumeStarted, setResumeStarted] = useState(false)
 
   const load = useCallback(async function load() {
     const supabase = createClient()
@@ -108,7 +114,7 @@ export default function ProfilePage() {
     if (!user) { setLoading(false); return }
 
     try {
-      const [{ data: profileData }, { data: apps }] = await Promise.all([
+      const [{ data: profileData }, { data: apps }, storedResume] = await Promise.all([
         supabase.from('users').select('*').eq('id', user.id).single(),
         // Full rows, not counts. The ladder needs outcomes and response dates,
         // and fetching them here means one round trip instead of three.
@@ -116,7 +122,10 @@ export default function ProfilePage() {
           .from('applications')
           .select('status, applied_at, outcome, first_response_at, jobs (kind, evidence_kind)')
           .eq('user_id', user.id),
+        loadResume(),
       ])
+
+      setResumeStarted(Boolean(storedResume && Object.keys(storedResume).length > 0))
 
       if (profileData) setProfile(profileData as unknown as UserProfile)
 
@@ -160,6 +169,26 @@ export default function ProfilePage() {
   }
 
   const toOnboarding = useCallback(() => router.push('/onboarding'), [router])
+
+  /**
+   * Send each stepper circle where its step actually lives.
+   *
+   * Every one of them used to go to /onboarding, so the "NEXT — Add your
+   * resume" card dropped a teen into the thirteen-step signup flow they had
+   * already finished. The card names one specific action and then does a
+   * different, longer one, which is the fastest way to teach someone that the
+   * prompts in your app are not worth tapping.
+   *
+   * Reference is not a route at all — it is a card further down this same
+   * page — so it scrolls instead of navigating.
+   */
+  const handleStep = useCallback((step: ProfileStep) => {
+    if (step.id === 'reference') {
+      document.getElementById('reference-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    router.push(step.href ?? '/onboarding')
+  }, [router])
 
   if (loading) {
     return (
@@ -236,7 +265,8 @@ export default function ProfilePage() {
     { id: 'transport', label: 'Transport', done: transports.length > 0 },
     { id: 'interests', label: 'Interests', done: interests.length > 0 },
     { id: 'skills', label: 'Skills', done: skills.length > 0 },
-    { id: 'resume', label: 'Resume', done: Boolean(profile.resume_url) },
+    // Its own page now, not a step of onboarding. See /resume.
+    { id: 'resume', label: 'Resume', done: Boolean(resumeStarted), href: '/resume' },
     // Naming someone is asking, not having.
     { id: 'reference', label: 'Reference', done: Boolean(referenceState.confirmedAt) },
   ]
@@ -250,7 +280,7 @@ export default function ProfilePage() {
           steps={steps}
           savedCount={savedCount}
           appliedCount={appliedCount}
-          onStep={toOnboarding}
+          onStep={handleStep}
         />
       </div>
 
@@ -266,7 +296,9 @@ export default function ProfilePage() {
         {/* ── Reference ──
             High on the page because it is the only claim here that somebody
             other than the teen can confirm. It outranks everything below it. */}
-        <ReferenceCard reference={referenceState} onSaved={reload} />
+        <div id="reference-card">
+          <ReferenceCard reference={referenceState} onSaved={reload} />
+        </div>
 
         {/* ── Availability ── */}
         <div>

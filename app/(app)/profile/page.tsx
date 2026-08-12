@@ -380,31 +380,42 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* ── Resume ── */}
+        {/* ── Resume ──
+            Points at /resume, which builds one from data we already hold,
+            rather than at a file upload that never worked. The old link went
+            to users.resume_url — a Supabase getPublicUrl() that answers 400,
+            so "Resume uploaded, tap to view" was dead for everyone. */}
         <div>
           <SectionHead icon="doc" title="Resume" />
-          {profile.resume_url ? (
-            <a href={String(profile.resume_url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-              <Panel style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--et-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="var(--et-blue)" aria-hidden="true">
-                    <path d="M5 2.6h5l3.6 3.6v9.2H5Z" strokeWidth="1.6" strokeLinejoin="round" />
-                    <path d="M10 2.6v3.6h3.6" strokeWidth="1.6" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--et-ink)' }}>Your resume is ready</p>
-                  <p style={{ fontSize: '12px', color: 'var(--et-blue)', marginTop: 1 }}>Tap to open</p>
-                </div>
-              </Panel>
-            </a>
-          ) : (
-            <AddTile
-              label="Build a resume"
-              hint="The coach writes one from what is already on this page. Takes a minute."
-              onClick={() => router.push('/career')}
-            />
-          )}
+          <button
+            onClick={() => router.push('/resume')}
+            className="press"
+            style={{
+              width: '100%', textAlign: 'left', cursor: 'pointer',
+              background: 'var(--et-surface)', border: '1px solid var(--et-border)',
+              borderRadius: 18, padding: '15px 16px',
+              display: 'flex', alignItems: 'center', gap: 13,
+            }}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--et-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="var(--et-blue)" aria-hidden="true">
+                <path d="M5 2.6h5l3.6 3.6v9.2H5Z" strokeWidth="1.6" strokeLinejoin="round" />
+                <path d="M10 2.6v3.6h3.6" strokeWidth="1.6" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--et-ink)' }}>
+                Open your resume
+              </p>
+              <p style={{ fontSize: '12px', color: 'var(--et-muted)', marginTop: 2, lineHeight: 1.45 }}>
+                Already started from your profile. Edit it, save it as a PDF, or paste it
+                into an application.
+              </p>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }} aria-hidden="true">
+              <path d="M6 3.5L10.5 8L6 12.5" stroke="var(--et-placeholder)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
 
         {/* ── Account ── */}

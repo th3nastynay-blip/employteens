@@ -13,10 +13,20 @@
  * Generic career pages are permanently excluded regardless of HTTP status.
  *
  * NOTE on scope: for ATS-direct sources (Greenhouse/Lever/Ashby/SmartRecruiters) the
- * title/location we ingest comes straight from that ATS's own structured API response —
- * it IS the source of truth, and a posting only appears in that API while it's open. So
- * content-level title/location/closed-text checks are only run for the non-JS-required
- * path (aggregator redirect links), where we're trusting an arbitrary third-party page.
+ * title/location we ingest comes straight from that ATS's own structured API response,
+ * so content-level title/location checks are only run for the non-JS-required path
+ * (aggregator redirect links) where we're trusting an arbitrary third-party page.
+ *
+ * THAT SCOPING USED TO GO TOO FAR AND IT IS WHY DEAD JOBS PERSISTED. It also skipped
+ * the NETWORK CALL for those sources, returning `verified` from the URL shape alone on
+ * the grounds that the ATS API had been the source of truth. True at ingest, false at
+ * re-verification: a filled Greenhouse role keeps the same URL and the same job ID
+ * forever, so nothing could ever retire it and teens tapped through to "no longer
+ * accepting applications" while our records said healthy.
+ *
+ * These pages are JS-rendered, so their BODY is an empty shell — but the STATUS LINE is
+ * real. A removed posting 404s. So we now always make the request and judge ATS links on
+ * status code and redirect target only, never on body text.
  */
 
 export type VerificationStatus =
@@ -347,6 +357,64 @@ function detectClosedPosting(text: string): boolean {
   return CLOSED_POSTING_PATTERNS.some((p) => p.test(text))
 }
 
+/** GET with an abort timeout. Follows redirects so `res.url` is the real destination. */
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), timeoutMs)
+  try {
+    return await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: ctl.signal,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        Accept: 'text/html,application/json,*/*',
+      },
+    })
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+/**
+ * WHY THERE IS NO ATS JSON PROBE HERE.
+ *
+ * I wrote one — rewriting boards.greenhouse.io/<board>/jobs/<id> to
+ * boards-api.greenhouse.io/v1/boards/<board>/jobs/<id>, and the Lever
+ * equivalent — on the theory that those endpoints are authoritative and cheap.
+ * Then I tested it and a board that should exist ALSO answered 404, which means
+ * I could not tell a correct probe from a malformed one.
+ *
+ * That asymmetry is the whole argument. A probe that is wrong 404s, and a 404
+ * here retires the listing — so an unverified URL rewrite does not risk keeping
+ * dead jobs, it risks deleting live ones, which is far worse and completely
+ * silent. Fetching the original URL and reading its status has no such failure
+ * mode: the URL is the one the teen would actually open, so whatever it answers
+ * is by definition the truth about what they would see.
+ *
+ * If this is revisited, validate the mapping against a known-live posting from
+ * our own jobs table first, not against a guessed board name.
+ */
+
+/**
+ * Is this the root of a job board rather than one posting?
+ *
+ * A closed ATS role often 302s to the board index instead of 404ing, which
+ * looks like a perfectly healthy 200 unless you compare the final URL.
+ */
+export function isBoardRoot(finalUrl: string): boolean {
+  try {
+    const u = new URL(finalUrl)
+    const segments = u.pathname.split('/').filter(Boolean)
+    // "/", "/company", "/company/jobs" — no ID left in the path.
+    if (segments.length <= 2 && !/\d{4,}/.test(u.pathname)) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
 /**
  * Loose token-overlap check — NOT a guarantee of correctness. HTML structure
  * varies too much across employer sites to do exact matching reliably. This
@@ -403,23 +471,87 @@ export async function verifyJobUrl(
     }
   }
 
-  // Step 2: For JS-required ATSs, trust the URL if it has a specific job ID pattern.
-  // Title/location came from that same ATS's structured API response, so we don't
-  // re-verify content here — the ingest step already has the source of truth.
+  // ── Step 2: JS-rendered ATS pages ──
+  //
+  // THIS WAS THE BIGGEST SOURCE OF DEAD LISTINGS IN THE FEED.
+  //
+  // It used to return `verified, is_active: true` here WITHOUT MAKING A REQUEST,
+  // on the reasoning that the title and location came from the ATS's own API at
+  // ingest time. That reasoning is sound for ingest and wrong for
+  // re-verification: it confuses "this was real when we found it" with "this is
+  // real now". A Greenhouse role filled six months ago keeps the exact same URL
+  // shape and the exact same job ID, so it passed this check forever and no
+  // amount of re-running the cron could ever retire it. Teens were tapping
+  // through to "this position is no longer accepting applications" and we were
+  // recording the link as healthy.
+  //
+  // The original worry was real though: these pages are JS-rendered, so the HTML
+  // we get back is an empty shell. Body-text checks on them false-positive
+  // everything as dead, which is presumably why the check was skipped wholesale.
+  //
+  // The fix is that JS rendering affects the BODY, not the STATUS LINE. A
+  // removed Greenhouse or Lever posting answers 404 to a plain GET even though a
+  // live one answers 200 with a shell. So: make the request, judge it on status
+  // and redirect target only, and never on body text. Where the ATS publishes a
+  // JSON endpoint we ask that instead, because it is authoritative and cheap.
   if (requiresJSRendering(url)) {
-    if (isSpecificJobPosting(url)) {
-      return {
-        status: 'verified',
-        http_status: 200,
-        is_active: true,
-        reason: 'ATS-hosted specific job posting (JS-rendered, URL pattern verified)',
-      }
-    } else {
+    if (!isSpecificJobPosting(url)) {
       return {
         status: 'generic',
         http_status: null,
         is_active: false,
         reason: 'ATS page without specific job ID — likely a search/list page',
+      }
+    }
+
+    try {
+      const res = await fetchWithTimeout(url, timeoutMs)
+
+      if (res.status === 404 || res.status === 410) {
+        return {
+          status: 'not_found',
+          http_status: res.status,
+          is_active: false,
+          reason: `ATS posting returned ${res.status} — the role has been taken down`,
+        }
+      }
+
+      // Closed roles frequently 302 back to the board root rather than 404ing.
+      const finalUrl = res.url || url
+      if (finalUrl !== url && isBoardRoot(finalUrl)) {
+        return {
+          status: 'redirect',
+          http_status: res.status,
+          is_active: false,
+          reason: `Redirected to the job board root (${finalUrl}) — posting is gone`,
+          final_url: finalUrl,
+        }
+      }
+
+      // 403 and 429 are anti-bot responses, not evidence the job is gone.
+      // Retiring a live listing costs more than carrying a dead one for a day.
+      if (res.status >= 500 || res.status === 403 || res.status === 429) {
+        return {
+          status: 'verified',
+          http_status: res.status,
+          is_active: true,
+          reason: `ATS responded ${res.status} (blocked or unavailable) — kept, not evidence of removal`,
+        }
+      }
+
+      return {
+        status: 'verified',
+        http_status: res.status,
+        is_active: true,
+        reason: `ATS posting live (${res.status}, checked over the network rather than assumed)`,
+      }
+    } catch {
+      // Timeout or network error. Same reasoning as above: not evidence.
+      return {
+        status: 'verified',
+        http_status: null,
+        is_active: true,
+        reason: 'ATS check timed out — kept, since a timeout is not evidence of removal',
       }
     }
   }

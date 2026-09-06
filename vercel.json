@@ -9,6 +9,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/ingest/opportunities?recheck=1",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/generate-feed",
       "schedule": "0 10 * * *"
     }

@@ -250,11 +250,11 @@ export default function DashboardPage() {
    * #418 (server/client text mismatch) on every single dashboard load. It was
    * in the production console continuously.
    *
-   * It was not cosmetic. A hydration mismatch makes React discard and re-render
-   * the subtree, which is what left the "Finding your matches…" headline on
-   * screen underneath a fully-loaded feed — its AnimatePresence exit never
-   * completed, so the page said it was still searching while showing 25
-   * results.
+   * A hydration mismatch makes React discard and re-render the subtree, which
+   * is worth avoiding on its own. It was initially blamed for the stuck
+   * "Finding your matches…" headline too; that turned out to be wrong — the
+   * headline was still stuck once this error was gone. That bug had its own
+   * cause (AnimatePresence mode="wait"), fixed separately below.
    *
    * `timeLabel` is therefore null on the server and on the first client paint,
    * and fills in after mount. Both sides render the same thing, so there is
@@ -283,9 +283,25 @@ export default function DashboardPage() {
             is the anchor — it says where the teen is, which is more useful than
             a count of our inventory. Three stacked headers all saying versions
             of the same thing was the pre-consolidation state. */}
-        <AnimatePresence mode="wait">
-          {isLoading && (
-            <motion.div key="scanning" exit={{ opacity: 0, y: -4 }}>
+        {/* NO AnimatePresence HERE, DELIBERATELY.
+ *
+ * This was <AnimatePresence mode="wait"> around a single conditional child.
+ * mode="wait" holds the exiting child on screen until the INCOMING one is
+ * ready, and there is no incoming one — the child is either rendered or it
+ * is not. So the exit never completed and the headline stayed on screen
+ * permanently. Live on production: "Finding your matches…" sitting above a
+ * fully loaded feed of 25 results, with the tab counts already filled in.
+ * The page claimed to still be searching while showing the answers.
+ *
+ * A first attempt blamed hydration error #418 for this. That error was real
+ * and is fixed (see timeLabel above), but it was not the cause — the
+ * headline stayed stuck after the error was gone. This is the actual cause.
+ *
+ * A loading header does not need an exit animation. It needs to leave when
+ * loading ends. Plain conditional rendering cannot get stuck.
+ */}
+        {isLoading && (
+          <div>
               <motion.h1
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -312,9 +328,8 @@ export default function DashboardPage() {
                   {SCAN_STATES[scanIdx]}
                 </span>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </div>
+        )}
       </div>
 
       {/* ── Where you are on the ladder, and the next two moves ──

@@ -6,19 +6,28 @@ Audited against the live deployment at `employteensfinal.vercel.app` and the rep
 
 The engineering is in better shape than the prompt that commissioned this audit assumed. Authentication is correct, secrets are not leaking, every privileged endpoint is guarded, the build is clean, and the link verifier is unusually careful. I could not find a security hole.
 
-The problem is not the code. It is that the product currently has almost no job supply reaching users, and the parts of the interface that describe the supply were overstating it. Two of the three fixes below exist to stop the app asserting things that are not true.
+The supply is real too: 243 employer jobs, every one verified. The gap is at the bottom of the age range. 206 of those 243 are 16+, 32 are 18+, and exactly none are open to a 14-year-old. The fixes below are about the app stating things it had not checked.
 
 ## What would have gone wrong in the room
 
-**1. The homepage number and the app disagreed by 10x.** The landing page read "273 openings live right now". A signed-in teen's feed held 28 items. Anyone in that meeting could have found the gap in ninety seconds by making an account, and the whole pitch rests on trust.
+**1. The feed looked empty because the test account is 14 years old.** Signed in as the founder's own profile (age 14), `/jobs` showed 28 items, all competitions and volunteering, with the "Paid" chip matching 0. That is not the inventory. That is what a 14-year-old is eligible for.
 
-The cause: `/api/public-stats` counted rows where `status='active'`, but the feed additionally requires `verification_status='verified'`. About 245 employer postings sit in the table having failed URL verification — correctly hidden from teens, and wrongly counted on the marketing page. Fixed: the public number now uses the same predicate the feed uses.
+Measured directly against the database:
 
-The headline now reads "28 verified · 245 in review" rather than "273 openings". Both numbers are true, and the gap is the pitch: a listing is held back until its apply link passes. That is the product.
+| Minimum age | Employer jobs | Verified |
+|---|---|---|
+| 15 | 5 | 5 |
+| 16 | 206 | 206 |
+| 18 | 32 | 32 |
+| **Total** | **243** | **243 (100%)** |
 
-**2. The feed contains no paid jobs at all.** On `/jobs`, the chip counts read: Open now 28, Paid **0**, Near me **0**, Virtual 16. Every one of the 28 items is a competition, programme or volunteering listing. For a platform whose landing page says "Part-time jobs in Hudson County and NYC", clicking "Paid" and getting zero is the worst single moment available in the demo.
+Every employer listing in the table has passed URL verification. Nothing is stuck in a backlog. The lowest minimum age anywhere in the employer inventory is 15, so a 14-year-old is eligible for **zero paid jobs** and sees only the ~30 curated opportunities. A 16-year-old sees 211.
 
-This is a data-pipeline state, not a bug, and I could not fix it without writing to the database. See "What I could not fix" below.
+The filter doing this is `UnifiedFeed.tsx`: `if (profileAge) q = q.lte('min_age', profileAge)`, with the equivalent `if (effectiveAge < job.min_age) continue` in `generate-feed` and `match-user`. That behaviour is correct and should not change. Sending a 14-year-old to an 18+ posting is the failure this product exists to prevent.
+
+**Demo on a 16 or 17 year old profile.** A 14-year-old account is the single worst case in the dataset and makes a working product look empty.
+
+**2. The homepage number did not match the feed.** `/api/public-stats` counted `status='active'` while the feed also requires `verification_status='verified'` and `scam_risk_score < 70`. Currently those happen to agree, because everything is verified, but they were two different definitions of the same number and would have drifted apart the moment anything failed verification. Now they use one predicate, and the label says "verified" because that is now a claim the query actually checks.
 
 **3. Six listings were claiming to be in Jersey City when they are not.** `toJobRow` in `lib/jobs/opportunity-ingest.ts` derived a town from an eligibility region:
 
@@ -47,7 +56,7 @@ In a Jersey City municipal office, "Greater Newark Conservancy — Jersey City, 
 
 ## What I changed
 
-All changes are in the working tree, unstaged. Nothing is deployed and nothing touched the database.
+Committed, not yet pushed. Nothing touched the database.
 
 | File | Change |
 |---|---|
@@ -57,7 +66,7 @@ All changes are in the working tree, unstaged. Nothing is deployed and nothing t
 | `components/jobs/JobCard.tsx` | Uses `displayLocation`; opportunity rows show "Grades N–M" instead of a fabricated "N+ by law" |
 | `components/jobs/JobSheet.tsx`, `components/feed/OpportunityCard.tsx`, `components/feed/OpportunitySheet.tsx` | Use `displayLocation` |
 | `app/(app)/dashboard/page.tsx` | Greeting computed after mount — kills hydration error #418 and the stuck loading headline |
-| `app/api/public-stats/route.ts` | Public counts use the same predicate as the feed |
+| `app/api/public-stats/route.ts` | Public counts use the same predicate as the feed, and report the unverified backlog separately (currently 0) |
 | `scripts/test-opportunity-location.ts` | **New.** 60 assertions locking the location bug down |
 | `scripts/test-opportunity-ingest.ts` | Fixed two assertions that were encoding bugs as expected behaviour (see below) |
 
@@ -73,7 +82,7 @@ It passed, because the code hardcoded Jersey City. The test was not verifying a 
 
 ## What I could not fix, and why
 
-**No paid jobs in the feed.** Roughly 245 employer postings are in the table but not `verification_status='verified'`, so none reach users. Fixing this means either re-running ingest and the verifier against production, or relaxing the verifier — and the verifier is the best thing in this codebase, so relaxing it would be the wrong trade. Both are database writes, which were out of scope for this pass. This is the number one thing to resolve before any public launch, and the honest framing for tomorrow is that supply is the open problem and the verifier is why the number is small.
+**Supply for 14 and 15 year olds.** Not a bug and not fixable in code. 14-year-olds are eligible for 0 of 243 employer jobs; 15-year-olds for 5. The curated opportunities exist precisely to give that group something, and they are doing the job they were built for. Growing this means employer outreach, not engineering.
 
 **Stale locations in the database.** The display-time fix means cards read correctly, but the rows still hold "Jersey City, NJ" and ZIP 07302. Anything computing distance server-side — the "Near You" tab, `commute_estimate` — still measures from the wrong origin. A re-ingest clears it.
 
@@ -157,19 +166,9 @@ The 245 unverified employer postings were not individually checked, since none o
 
 ---
 
-### Still open, highest priority
+### Correction
 
-The 245 unverified rows have stored reason codes and nobody has looked at them. Run this in the Supabase SQL editor:
-
-```sql
-select verification_status, count(*)
-from jobs
-where status = 'active' and is_active = true
-group by verification_status
-order by count(*) desc;
-```
-
-Mostly `not_found` / `generic` means the verifier is right and supply is the real problem. Mostly `aggregator` / `no_apply_mechanism` / `mismatch` means the gate is over-rejecting live jobs, which is recoverable. Three specific suspects, all in `lib/jobs/verify-url.ts`: `isTrustedDestination` requiring every token of a multi-word employer name in the hostname; `no_apply_mechanism` rejecting JS-rendered pages whose body is an empty shell; and the aggregator final-destination rule, which already zeroed the Adzuna source once (935 fetched, 0 verified).
+An earlier draft of this document claimed ~245 listings had failed URL verification. That was wrong. It was inferred from a gap between two counts and never checked against the database. The query above shows 243 of 243 employer listings verified. The real explanation for the empty-looking feed was the age of the test account.
 
 ### Separately: rotate the GitHub token
 

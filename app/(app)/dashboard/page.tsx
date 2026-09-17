@@ -150,20 +150,66 @@ export default function DashboardPage() {
           effectiveAge >= j.min_age,
         )
 
-      if (matchedJobs.length >= 3) {
+      /**
+       * THE CACHE ONLY NOTICED GOING DOWN, NEVER GOING UP.
+       *
+       * The staleness test was `matchedJobs.length < preComputed.length` —
+       * i.e. "did the safety filters just drop rows from the cache?" That
+       * catches a job expiring, or a user lowering their age. It cannot
+       * possibly catch the opposite, because raising your age REMOVES NOTHING:
+       * every row already in the cache still passes, the two lengths stay
+       * equal, no refresh fires, and the early `return` below skips the fresh
+       * query entirely.
+       *
+       * Live consequence: a 14-year-old's cache holds ~25 rows, all of them
+       * curated opportunities, because at 14 that is all they are eligible
+       * for. Change the profile to 18 and every one of those 25 still passes
+       * `18 >= min_age`. So the dashboard kept serving a 14-year-old's feed to
+       * an 18-year-old and the 243 paid jobs never loaded. Editing your age
+       * appeared to do nothing at all.
+       *
+       * The fix is to ask the question the length comparison was standing in
+       * for: how many jobs is this profile eligible for RIGHT NOW? That is one
+       * head-only count, no rows transferred. If the database has meaningfully
+       * more than the cache is showing, the cache was built for a different
+       * profile and we recompute instead of trusting it.
+       */
+      const { count: eligibleNow } = await supabase
+        .from('jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .eq('is_active', true)
+        .eq('verification_status', 'verified')
+        .lt('scam_risk_score', 70)
+        .lte('min_age', effectiveAge)
+
+      // job_matches caps at 100 and the match engine drops anything scoring
+      // below its threshold, so the cache is legitimately smaller than the
+      // eligible pool. Only treat it as stale when the gap is large enough
+      // that it cannot be explained by scoring.
+      const cacheLooksStale =
+        typeof eligibleNow === 'number' && eligibleNow > matchedJobs.length * 2 && eligibleNow > 30
+
+      const needsRefresh = matchedJobs.length < preComputed.length || cacheLooksStale
+
+      if (needsRefresh) {
+        // Not fire-and-forget any more. When the cache is stale the old
+        // behaviour showed the wrong feed for this whole page view and only
+        // corrected on some later visit, which is exactly how "I changed my
+        // age and nothing happened" happens.
+        await fetch('/api/match-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.id }),
+        }).catch(() => {/* fall through to the fresh compute below */})
+      }
+
+      if (matchedJobs.length >= 3 && !cacheLooksStale) {
         classifyAndSetJobs(matchedJobs)
         setTotalCount(matchedJobs.length)
-        // Cache had stale rows — refresh it in the background
-        if (matchedJobs.length < preComputed.length) {
-          fetch('/api/match-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: user.id }),
-          }).catch(() => {/* non-critical */})
-        }
         return
       }
-      // Cache mostly stale — fall through to the fresh compute below
+      // Cache stale or too thin — fall through to the fresh compute below
     }
 
     // Fallback: run match engine on-the-fly if no pre-computed matches

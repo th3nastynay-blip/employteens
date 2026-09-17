@@ -35,10 +35,28 @@ export function GetReadyMode({ age, hasPapers, onPapers }: {
   const currentMonth = new Date().getMonth() + 1
 
   useEffect(() => {
-    fetch('/api/public-stats')
-      .then((r) => r.json())
-      .then((d) => { if (d?.active_jobs > 0) setUnlockCount(d.active_jobs) })
-      .catch(() => { /* counter just doesn't render */ })
+    // Count the thing the sentence actually claims: employer jobs that a
+    // 16-year-old becomes eligible for. public-stats' active_jobs was the wrong
+    // number here — it counts every row including the ~30 curated competitions
+    // and volunteering entries, which are open to this teen NOW and do not
+    // "unlock at 16" at all.
+    let cancelled = false
+    ;(async () => {
+      try {
+        const supabase = createClient()
+        const { count } = await supabase
+          .from('jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'active')
+          .eq('is_active', true)
+          .eq('verification_status', 'verified')
+          .lt('scam_risk_score', 70)
+          .neq('source', 'opportunity')
+          .lte('min_age', 16)
+        if (!cancelled && typeof count === 'number' && count > 0) setUnlockCount(count)
+      } catch { /* counter just doesn't render */ }
+    })()
+    return () => { cancelled = true }
   }, [])
 
   function askCoach(prompt: string) {
@@ -203,8 +221,25 @@ export function GetReadyMode({ age, hasPapers, onPapers }: {
         </div>
       )}
 
-      {/* ── Unlock counter ── */}
-      {unlockCount !== null && (
+      {/* ── Unlock counter ──
+       *
+       * "unlock at 16" is only true if you are under 16. This block carried no
+       * age condition, so an 18-year-old was shown "273 verified jobs unlock at
+       * 16 — every one already checked and waiting" about jobs they were
+       * already eligible for. Telling someone to wait for something they
+       * already have is worse than saying nothing.
+       *
+       * The count was wrong too. It used public-stats' active_jobs (273), which
+       * includes the ~30 curated competitions and volunteering entries. Those
+       * are not jobs and they do not unlock at 16 — they are open now, which is
+       * the entire reason they exist. The number that belongs in this sentence
+       * is employer jobs a 16-year-old becomes eligible for.
+       *
+       * The surrounding panel is gated on rung 0–2 deliberately, because having
+       * nothing on your record yet is age-independent. This one line is not, so
+       * it gets its own gate.
+       */}
+      {unlockCount !== null && age < 16 && (
         <div
           className="card px-4 py-3.5 text-center"
           style={{ background: 'var(--et-surface-2)', border: '1px dashed var(--et-border-mid)' }}

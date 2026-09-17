@@ -14,7 +14,7 @@ The problem is not the code. It is that the product currently has almost no job 
 
 The cause: `/api/public-stats` counted rows where `status='active'`, but the feed additionally requires `verification_status='verified'`. About 245 employer postings sit in the table having failed URL verification — correctly hidden from teens, and wrongly counted on the marketing page. Fixed: the public number now uses the same predicate the feed uses.
 
-Expect the headline to drop from 273 to roughly 28. That is the number the product can defend.
+The headline now reads "28 verified · 245 in review" rather than "273 openings". Both numbers are true, and the gap is the pitch: a listing is held back until its apply link passes. That is the product.
 
 **2. The feed contains no paid jobs at all.** On `/jobs`, the chip counts read: Open now 28, Paid **0**, Near me **0**, Virtual 16. Every one of the 28 items is a competition, programme or volunteering listing. For a platform whose landing page says "Part-time jobs in Hudson County and NYC", clicking "Paid" and getting zero is the worst single moment available in the demo.
 
@@ -157,4 +157,24 @@ The 245 unverified employer postings were not individually checked, since none o
 
 ---
 
-*Nothing in this audit was deployed. The live site still has every bug described above until these changes ship.*
+### Still open, highest priority
+
+The 245 unverified rows have stored reason codes and nobody has looked at them. Run this in the Supabase SQL editor:
+
+```sql
+select verification_status, count(*)
+from jobs
+where status = 'active' and is_active = true
+group by verification_status
+order by count(*) desc;
+```
+
+Mostly `not_found` / `generic` means the verifier is right and supply is the real problem. Mostly `aggregator` / `no_apply_mechanism` / `mismatch` means the gate is over-rejecting live jobs, which is recoverable. Three specific suspects, all in `lib/jobs/verify-url.ts`: `isTrustedDestination` requiring every token of a multi-word employer name in the hostname; `no_apply_mechanism` rejecting JS-rendered pages whose body is an empty shell; and the aggregator final-destination rule, which already zeroed the Adzuna source once (935 fetched, 0 verified).
+
+### Separately: rotate the GitHub token
+
+A personal access token is stored in plaintext in `.git/config` as part of the `origin` remote URL. Not committed, so not public, but it is a live push credential sitting on disk. Revoke it and switch the remote to SSH or a credential helper.
+
+---
+
+*Committed as `e276425`, not yet pushed. The live site carries every bug described above until `git push` runs.*

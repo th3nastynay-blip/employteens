@@ -19,6 +19,7 @@
 import { motion } from 'framer-motion'
 import { OrgLogo } from '@/components/ui/OrgLogo'
 import { reasonLine, isVirtual, needsWorkingPapers, type FeedItem } from '@/lib/feed-filters'
+import { displayLocation } from '@/lib/jobs/opportunity-location'
 
 const EVIDENCE_COPY: Record<string, string> = {
   reference: 'Ends with a reference',
@@ -117,7 +118,7 @@ export function OpportunityCard({ item, hasPapers, index = 0, onOpen, upcoming =
         {!needsWorkingPapers(item) && hasPapers !== true && (
           <Pill text="No papers needed" tone="green" />
         )}
-        <Pill text={isVirtual(item) ? 'Virtual' : String(item.location ?? '')} tone="plain" />
+        <Pill text={isVirtual(item) ? 'Virtual' : displayLocation(item)} tone="plain" />
         <Pill text={cost.text} tone={cost.muted ? 'muted' : cost.text === 'Free' ? 'green' : 'plain'} />
         {evidence && <Pill text={evidence} tone={item.evidence_kind === 'certificate' ? 'muted' : 'blue'} />}
       </div>

@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect } from 'react'
 import { OrgLogo } from '@/components/ui/OrgLogo'
 import { isVirtual, needsWorkingPapers, type FeedItem } from '@/lib/feed-filters'
+import { displayLocation } from '@/lib/jobs/opportunity-location'
 
 const EVIDENCE_LINE: Record<string, string> = {
   reference: 'You finish with a named adult who will take a reference call. That is the strongest thing on this list.',
@@ -142,7 +143,7 @@ export function OpportunitySheet({ item, hasPapers, upcoming = false, onClose }:
                   <span className={`status-dot ${upcoming ? 'status-upcoming' : 'status-open'}`} style={{ marginRight: 0 }} />
                   {upcoming ? 'Not open yet' : 'Open now'}
                 </span>
-                <span className="pill">{isVirtual(item) ? 'Virtual' : String(item.location ?? 'In person')}</span>
+                <span className="pill">{isVirtual(item) ? 'Virtual' : displayLocation(item)}</span>
                 <span className={`pill ${cost!.muted ? 'pill-muted' : cost!.text === 'Free' ? 'pill-green' : ''}`}>
                   {cost!.text}
                 </span>
@@ -175,7 +176,7 @@ export function OpportunitySheet({ item, hasPapers, upcoming = false, onClose }:
                     regions.includes('GLOBAL') ? 'Open worldwide'
                       : regions.includes('US') ? 'United States'
                       : regions.length > 0 ? regions.map((r) => r.replace('US-', '')).join(', ')
-                      : String(item.location ?? 'Not stated')
+                      : displayLocation(item)
                   }
                 />
                 <Row label="Format" value={isVirtual(item) ? 'Virtual' : String(item.delivery ?? 'In person').replace('_', ' ')} />

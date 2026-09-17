@@ -24,6 +24,7 @@ import { useEffect } from 'react'
 import { OrgLogo } from '@/components/ui/OrgLogo'
 import type { JobMatch } from '@/lib/types/database'
 import type { FitFactor } from '@/lib/ai/match-engine'
+import { displayLocation } from '@/lib/jobs/opportunity-location'
 
 interface Props {
   job: JobMatch | null
@@ -156,7 +157,7 @@ export function JobSheet({ job, fit, onClose, onApply, onSave, isSaved }: Props)
               <div style={{ marginTop: 20 }}>
                 <p className="numbered-eyebrow" style={{ marginBottom: 10 }}>THE DETAILS</p>
                 <Row label="Pay" value={payLine(job)} muted={payLine(job).startsWith('Not')} />
-                <Row label="Where" value={String(job.location ?? 'Not stated')} />
+                <Row label="Where" value={displayLocation(job)} />
                 {typeof job.distance_miles === 'number' && (
                   <Row label="Distance" value={job.distance_miles < 1 ? 'Under a mile' : `${job.distance_miles.toFixed(1)} miles`} />
                 )}

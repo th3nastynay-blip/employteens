@@ -19,7 +19,24 @@ console.log('— logos derive from the apply URL, no files —')
 check('https url yields a favicon url', (logoForUrl('https://hosa.org/competitive-events/') ?? '').includes('hosa.org'))
 check('subdomain preserved', (logoForUrl('https://cs50.harvard.edu/x/') ?? '').includes('cs50.harvard.edu'))
 check('garbage url returns null rather than a broken image', logoForUrl('not a url') === null)
-check('every seed entry resolves a logo', OPPORTUNITY_SOURCES.every((o) => logoForUrl(o.apply_url) !== null))
+// This used to call logoForUrl(o.apply_url) with no homepage, and therefore
+// failed on exactly the two entries the `homepage` field exists to rescue:
+// bgic (forms.gle) and msk-53rd-street-volunteers (myworkdayjobs.com). Both
+// declare a homepage; the test simply was not passing it. The assertion the
+// product actually needs is "no entry renders a broken or generic logo", which
+// means resolving it the way the ingest does — apply_url, falling back to the
+// declared homepage.
+check(
+  'every seed entry resolves a logo (apply_url or declared homepage)',
+  OPPORTUNITY_SOURCES.every((o) => logoForUrl(o.apply_url, o.homepage) !== null),
+  OPPORTUNITY_SOURCES.filter((o) => logoForUrl(o.apply_url, o.homepage) === null).map((o) => o.slug).join(', '),
+)
+check(
+  'form-host entries declare a homepage so the card never shows a grey globe',
+  OPPORTUNITY_SOURCES
+    .filter((o) => /forms\.gle|myworkdayjobs\.com|submittable\.com|wufoo\.com/i.test(o.apply_url))
+    .every((o) => typeof o.homepage === 'string' && o.homepage.length > 0),
+)
 
 if (OPPORTUNITY_SOURCES.length === 0) {
   // Seed cleared 2026-08-10 pending the curated list. The pure helpers above
@@ -42,10 +59,22 @@ check('virtual entries are located "Virtual", not a town', vrow.location === 'Vi
 check('virtual entries have zero commute', vrow.commute_estimate === 0)
 check('virtual entries get max schedule flexibility', vrow.schedule_flexibility_score === 100)
 
+// THIS ASSERTION USED TO ENCODE THE BUG.
+//
+// It read: check('NJ in-person entries land in Jersey City', ...), and it
+// passed — because toJobRow hardcoded 'Jersey City, NJ' for every in-person
+// entry that was not tagged US-NY. The test was not verifying a location, it
+// was verifying that we always claimed the same one. That is how Rutgers–
+// Camden, Greater Newark Conservancy, North Bergen's library, Lyndhurst's
+// Meadowlands institute and Hackensack Riverkeeper all shipped to teens
+// labelled "Jersey City, NJ" with a green test suite.
+//
+// The right assertion is that the row reports the town the CURATED ENTRY
+// declares. Full coverage lives in scripts/test-opportunity-location.ts.
 const local = OPPORTUNITY_SOURCES.find((o) => o.delivery === 'in_person' && o.eligible_regions.includes('US-NJ'))!
 const lrow = toJobRow(local, 8)
-check('NJ in-person entries land in Jersey City', String(lrow.location).includes('Jersey City'), String(lrow.location))
-check('NJ in-person entries carry a real ZIP', lrow.zip_code !== '00000')
+check(`NJ in-person entry reports its own town, not a default`, lrow.location === local.city, `${local.slug}: row says "${lrow.location}", entry says "${local.city}"`)
+check('NJ in-person entries carry a real ZIP', lrow.zip_code !== '00000', `${local.slug}: ${lrow.zip_code}`)
 
 console.log('\n— cost honesty survives the mapping —')
 const freeOne = OPPORTUNITY_SOURCES.find((o) => o.cost_cents === null)!

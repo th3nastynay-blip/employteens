@@ -108,18 +108,47 @@ export function inSeason(o: OpportunitySource, month: number): boolean {
  * `location` carries a human string for the card. Virtual entries say "Virtual"
  * rather than a town, so the geo gate and the distance scorer both leave them
  * alone — virtual has no commute and should never be ranked down for distance.
+ *
+ * ── LOCATION USED TO BE INVENTED HERE ────────────────────────────────────
+ *
+ * This line was:
+ *
+ *   location: isVirtual ? 'Virtual'
+ *           : local === 'US-NY' ? 'New York, NY' : 'Jersey City, NJ'
+ *   zip_code: isVirtual ? '00000'
+ *           : local === 'US-NY' ? '10001' : '07302'
+ *
+ * An eligibility region is who may ENTER. It is not where the thing HAPPENS,
+ * and collapsing the two meant every in-person entry that was not tagged
+ * US-NY got written down as Jersey City at zip 07302. Live consequences:
+ * Rutgers–Camden (90 miles away) and Greater Newark Conservancy both read
+ * "Jersey City, NJ", and so did the University of Waterloo — a school in
+ * Ontario, Canada, which landed in the NJ bucket because its regions are
+ * ['US','GLOBAL'] with no US- prefix to match. The Rutgers card carried the
+ * tags "South Jersey" and "Long trip" directly above a line claiming Jersey
+ * City, so the card contradicted itself on screen.
+ *
+ * Now: `city`/`zip` are read off the curated entry. When an in-person entry
+ * has no city, we say so instead of picking one. The state code still comes
+ * from eligible_regions because that IS a legal-eligibility fact.
  */
 export function toJobRow(o: OpportunitySource, month: number) {
   const isVirtual = o.delivery === 'virtual'
   const local = o.eligible_regions.find((r) => r.startsWith('US-'))
   const state = local ? local.split('-')[1] : 'NJ'
 
+  // 00000 is the established "no commute, do not score distance" sentinel for
+  // virtual entries. An in-person entry with no curated zip gets the same
+  // treatment: refusing to score a distance is honest, inventing an origin
+  // point to score it from is not.
+  const zipCode = isVirtual ? '00000' : (o.zip ?? '00000')
+
   return {
     title: o.title,
     company: o.org,
-    location: isVirtual ? 'Virtual' : local === 'US-NY' ? 'New York, NY' : 'Jersey City, NJ',
+    location: isVirtual ? 'Virtual' : (o.city ?? 'Location not stated'),
     state,
-    zip_code: isVirtual ? '00000' : local === 'US-NY' ? '10001' : '07302',
+    zip_code: zipCode,
     apply_url: o.apply_url,
     apply_method: 'url',
     source: 'opportunity',

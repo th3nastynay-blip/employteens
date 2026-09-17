@@ -72,6 +72,34 @@ export interface OpportunitySource {
    * why the list looked like placeholder art.
    */
   homepage?: string
+
+  /**
+   * ── 6. LOCATION IS READ, NEVER DERIVED ───────────────────────────────
+   *
+   * Where an IN-PERSON opportunity physically happens, as "Town, ST".
+   * Ignored for virtual entries.
+   *
+   * toJobRow used to derive the location from eligible_regions alone:
+   *
+   *   local === 'US-NY' ? 'New York, NY' : 'Jersey City, NJ'
+   *
+   * which stamped "Jersey City, NJ" onto Rutgers–Camden (90 miles south),
+   * Greater Newark Conservancy, North Bergen's public library, the Lyndhurst
+   * Meadowlands institute, Hackensack Riverkeeper, and — because its regions
+   * are ['US','GLOBAL'] — the University of Waterloo, which is in Ontario,
+   * Canada. It also gave all of them zip 07302, so the distance scorer
+   * measured from a town they are not in.
+   *
+   * Rule 3 above says never a guess. A region code is not an address, and
+   * turning one into the other was exactly that.
+   *
+   * Leaving this off an in-person entry is allowed and honest — the card then
+   * shows whatever the row stored rather than a town we made up. Do not fill
+   * it in from memory; read it off the organiser's own contact page.
+   */
+  city?: string
+  /** Real ZIP for `city`. Feeds distance scoring, so a guess here is a lie. */
+  zip?: string
   description: string
 
   kind: 'competition' | 'program' | 'volunteer' | 'internship' | 'org_role'
@@ -204,6 +232,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Rutgers Summer Experience',
     org: 'Rutgers School of Business, Camden',
     slug: 'rutgers-ruse-camden',
+    // Rutgers School of Business–Camden, 227 Penn St, Camden NJ.
+    city: 'Camden, NJ',
+    zip: '08102',
     apply_url: 'https://business.camden.rutgers.edu/ruse-application/',
     homepage: 'camden.rutgers.edu',
     description:
@@ -319,6 +350,8 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'CEMC math and computing contests',
     org: 'University of Waterloo',
     slug: 'waterloo-cemc',
+    // CEMC is run by the University of Waterloo, Ontario. US students enter through their own school; nothing about this is in New Jersey.
+    city: 'Waterloo, ON, Canada',
     apply_url: 'https://cemc.uwaterloo.ca/contests',
     homepage: 'uwaterloo.ca',
     description:
@@ -459,6 +492,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Teen volunteer programs',
     org: 'North Bergen Free Public Library',
     slug: 'nbpl-teen-volunteer',
+    // North Bergen Free Public Library, 8411 Bergenline Ave.
+    city: 'North Bergen, NJ',
+    zip: '07047',
     apply_url: 'https://nbpl.org/teen-volunteer/',
     homepage: 'nbpl.org',
     description:
@@ -483,6 +519,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'River cleanups',
     org: 'Hackensack Riverkeeper',
     slug: 'hackensack-riverkeeper-cleanups',
+    // 206 Main St, Hackensack NJ 07601 (org contact page). Cleanup sites move around the watershed; the org is the fixed point.
+    city: 'Hackensack, NJ',
+    zip: '07601',
     apply_url: 'https://www.hackensackriverkeeper.org/cleanups',
     homepage: 'hackensackriverkeeper.org',
     description:
@@ -506,6 +545,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'High School Educational Monitoring Program',
     org: 'Meadowlands Research & Restoration Institute',
     slug: 'meadowlands-monitoring',
+    // One DeKorte Park Plaza, Lyndhurst NJ 07071 (meadowlandsrri.com contact page).
+    city: 'Lyndhurst, NJ',
+    zip: '07071',
     apply_url: 'https://meadowlandsrri.com/high-school-educational-monitoring-program/',
     homepage: 'meadowlandsrri.com',
     description:
@@ -529,6 +571,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Community group volunteering',
     org: 'Greater Newark Conservancy',
     slug: 'greater-newark-volunteer',
+    // Greater Newark Conservancy, Prince St, Newark NJ.
+    city: 'Newark, NJ',
+    zip: '07102',
     apply_url: 'https://greaternewark.org/volunteer-form-community-group/',
     homepage: 'greaternewark.org',
     description:
@@ -554,6 +599,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Academic Year Teen Internship',
     org: 'DOROT',
     slug: 'dorot-teen-internship',
+    // DOROT, Upper West Side, Manhattan.
+    city: 'New York, NY',
+    zip: '10024',
     apply_url: 'https://www.dorotusa.org/volunteer/academic-year-teen-internship/',
     homepage: 'dorotusa.org',
     description:
@@ -578,6 +626,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: '53rd Street Outpatient Volunteers',
     org: 'Memorial Sloan Kettering',
     slug: 'msk-53rd-street-volunteers',
+    // MSK 53rd Street Outpatient Center, Manhattan.
+    city: 'New York, NY',
+    zip: '10022',
     apply_url: 'https://msk.wd108.myworkdayjobs.com/MSKCC_Careers_Primary/job/New-York-NY/XMLNAME-53rd-Street-Outpatient-Volunteers_92807',
     homepage: 'mskcc.org',
     description:
@@ -602,6 +653,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Volunteer with Brooklyn Book Bodega',
     org: 'Brooklyn Book Bodega',
     slug: 'brooklyn-book-bodega',
+    // Brooklyn. ZIP is borough-level.
+    city: 'Brooklyn, NY',
+    zip: '11201',
     apply_url: 'https://www.brooklynbookbodega.org/volunteer',
     homepage: 'brooklynbookbodega.org',
     description:
@@ -625,6 +679,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Teen volunteering',
     org: 'Brooklyn Public Library',
     slug: 'brooklyn-public-library-volunteer',
+    // Brooklyn Public Library branches across the borough. ZIP is borough-level.
+    city: 'Brooklyn, NY',
+    zip: '11201',
     apply_url: 'https://www.bklynlibrary.org/volunteer',
     homepage: 'bklynlibrary.org',
     description:
@@ -649,6 +706,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Prep Center programs',
     org: 'Brooklyn College',
     slug: 'brooklyn-college-prep-center',
+    // Brooklyn College, 2900 Bedford Ave.
+    city: 'Brooklyn, NY',
+    zip: '11210',
     apply_url: 'https://www.brooklyn.edu/prepcenter/',
     homepage: 'brooklyn.edu',
     description:
@@ -671,6 +731,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Theatre classes and youth programs',
     org: 'Brooklyn Children\u2019s Theatre',
     slug: 'brooklyn-childrens-theatre',
+    // Brooklyn. ZIP is borough-level.
+    city: 'Brooklyn, NY',
+    zip: '11201',
     apply_url: 'https://www.brooklynchildrenstheatre.org/classes/',
     homepage: 'brooklynchildrenstheatre.org',
     description:
@@ -693,6 +756,9 @@ export const OPPORTUNITY_SOURCES: OpportunitySource[] = [
     title: 'Columbia Model UN Conference (CMUNCE)',
     org: 'Columbia University',
     slug: 'cmunce',
+    // Columbia University, Morningside Heights, Manhattan.
+    city: 'New York, NY',
+    zip: '10027',
     apply_url: 'https://cmunce.org/register-here',
     homepage: 'columbia.edu',
     description:

@@ -241,8 +241,30 @@ export default function DashboardPage() {
     }
   }
 
-  const hour = new Date().getHours()
-  const timeLabel = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
+  /**
+   * The greeting is time-of-day, and this page is statically prerendered.
+   *
+   * This used to be a bare `new Date().getHours()` read during render. The
+   * build output prerendered whatever "Good ___" was true at BUILD time, the
+   * browser rendered whatever is true NOW, and React threw hydration error
+   * #418 (server/client text mismatch) on every single dashboard load. It was
+   * in the production console continuously.
+   *
+   * It was not cosmetic. A hydration mismatch makes React discard and re-render
+   * the subtree, which is what left the "Finding your matches…" headline on
+   * screen underneath a fully-loaded feed — its AnimatePresence exit never
+   * completed, so the page said it was still searching while showing 25
+   * results.
+   *
+   * `timeLabel` is therefore null on the server and on the first client paint,
+   * and fills in after mount. Both sides render the same thing, so there is
+   * nothing to mismatch.
+   */
+  const [timeLabel, setTimeLabel] = useState<string | null>(null)
+  useEffect(() => {
+    const hour = new Date().getHours()
+    setTimeLabel(hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening')
+  }, [])
 
   return (
     <div className="flex flex-col min-h-full pb-nav">
@@ -254,7 +276,7 @@ export default function DashboardPage() {
           animate={{ opacity: 1, y: 0 }}
           style={{ fontSize: '14px', color: 'var(--et-muted)', fontWeight: 500 }}
         >
-          Good {timeLabel}{userName ? `, ${userName}` : ''} 👋
+          {timeLabel ? `Good ${timeLabel}` : 'Hey'}{userName ? `, ${userName}` : ''} 👋
         </motion.p>
 
         {/* Only the loading state gets a headline. Once loaded, RungCard below

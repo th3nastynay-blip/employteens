@@ -54,7 +54,7 @@ const STEPS = [
 ]
 
 export default function HomePage() {
-  const [stats, setStats] = useState<{ active_jobs: number; verified_today: number } | null>(null)
+  const [stats, setStats] = useState<{ active_jobs: number; verified_today: number; in_review: number } | null>(null)
 
   useEffect(() => {
     fetch('/api/public-stats')
@@ -138,10 +138,22 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* The only number on this page, and only when it is real. */}
+        {/* The only number on this page, and only when it is real.
+ *
+ * This said "{active_jobs} openings live right now" using a count that
+ * included every row the feed filters out. On 2026-09-16 it read 273 while a
+ * signed-in teen's feed held 28. A visitor could disprove the headline by
+ * making an account, which is a bad way to lose a room.
+ *
+ * `active_jobs` is now the count a teen can actually open. `in_review` is the
+ * backlog that has not cleared URL verification. Showing both is the honest
+ * version AND the better pitch: holding a listing back until its apply link
+ * passes is the product, so the gap is the argument, not the embarrassment.
+ */}
         {stats && (
           <p style={{ marginTop: 18, fontSize: '12.5px', color: 'var(--et-placeholder)' }}>
-            {stats.active_jobs} openings live right now
+            {stats.active_jobs} verified {stats.active_jobs === 1 ? 'opening' : 'openings'}
+            {stats.in_review > 0 ? ` · ${stats.in_review} in review` : ''}
             {stats.verified_today > 0 ? ` · ${stats.verified_today} link-checked today` : ''}
           </p>
         )}

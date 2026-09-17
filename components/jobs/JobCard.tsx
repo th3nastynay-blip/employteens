@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { openApplication } from '@/lib/jobs/apply'
 import { visibleTags } from '@/lib/jobs/quality-score'
+import { displayLocation } from '@/lib/jobs/opportunity-location'
 import { OrgLogo } from '@/components/ui/OrgLogo'
 import type { JobMatch } from '@/lib/types/database'
 import type { FitFactor } from '@/lib/ai/match-engine'
@@ -366,7 +367,29 @@ export function JobCard({ job, onSave, isSaved, index = 0, fit, onOpen }: JobCar
               So: green only when the employer's own posting stated an age, or
               a trusted source declared one. Otherwise muted, and the label
               says whose rule it is. */}
-          {employerAgeKnown ? (
+          {/* CURATED OPPORTUNITIES ARE NOT EMPLOYMENT, SO "BY LAW" IS A FALSE
+              CLAIM ON THEM.
+
+              opportunity-ingest sets min_age = Math.max(13, min_grade + 5)
+              and says so in a comment: it exists "purely so existing age
+              filters do not silently hide them from younger teens". It is
+              plumbing derived from a GRADE, not a child-labour floor. Rendering
+              it through the employment branch put "13+ by law · employer
+              unconfirmed" on a volunteering listing whose own tag one line
+              below read "Open at 12", and on a NASA citizen-science project
+              tagged "No age limit". The card contradicted itself and the half
+              that sounded most authoritative was the invented half.
+
+              Volunteering, competitions and courses have no statutory minimum
+              age, so this branch states the grade range — which is the real
+              gate, and the one the feed actually filters on. */}
+          {job.source === 'opportunity' ? (
+            (typeof job.min_grade === 'number' && typeof job.max_grade === 'number') ? (
+              <span className="pill pill-muted" title="Set by the organiser. Not employment, so no legal working age applies.">
+                Grades {job.min_grade}–{job.max_grade}
+              </span>
+            ) : null
+          ) : employerAgeKnown ? (
             <span className="pill pill-green">Ages {job.min_age}+</span>
           ) : (
             <span
@@ -395,7 +418,7 @@ export function JobCard({ job, onSave, isSaved, index = 0, fit, onOpen }: JobCar
           {teenFavorite && <span className="pill">Teen favourite</span>}
         </div>
 
-        <p style={{ fontSize: '12px', color: 'var(--et-placeholder)' }}>{job.location}</p>
+        <p style={{ fontSize: '12px', color: 'var(--et-placeholder)' }}>{displayLocation(job)}</p>
 
         {isHumanContact && job.contact_note && (
           <p style={{ fontSize: '12px', color: 'var(--et-subtle)', lineHeight: 1.4, background: 'var(--et-blue-light)', padding: '8px 10px', borderRadius: 'var(--radius-sm)' }}>

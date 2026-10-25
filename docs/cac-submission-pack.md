@@ -1,10 +1,10 @@
 # Congressional App Challenge — submission pack
 
-Everything for the form plus the video.
+Everything for the form plus the video, in the order the form asks for it.
 
 > **DEADLINE: 12:00 PM EDT, Monday 26 October 2026.** Checked against the
-> official 2026 CAC rules PDF. Not Sunday night. After the submission period
-> closes the entry cannot be modified in any way.
+> official 2026 CAC rules PDF. After the submission period closes the entry
+> cannot be modified in any way.
 
 ---
 
@@ -45,9 +45,95 @@ video so we adjust the number you say out loud.
 
 ---
 
-## 2. "What technical difficulties did you face programming your app?"
+---
 
-Pick either version. Both are true and specific.
+## 2. "Please briefly describe what your app does"
+
+Answers the question in the first sentence. "Briefly" is an instruction, so
+using all 400 words here reads as not being able to edit. 178 words.
+
+```
+EmployTeens is a job search app for 14 to 18 year olds in New York and New
+Jersey. A teen builds a profile, and the app shows them real openings they can
+actually get.
+
+Three things it does that a normal job site does not.
+
+It matches on a teenager's constraints. Your age, what time school ends, and
+how you get around all change the results. How you travel sets your radius:
+walking is one mile, a bike is three, a car is twenty-five. Every card shows
+why it matched.
+
+It checks that jobs are real. Every application link is verified before it
+goes live and re-checked nightly. Anything that dies, redirects to a homepage,
+or says "no longer accepting applications" is removed. There are currently 243
+verified openings at employers like Wegmans, Five Below, and Eataly.
+
+It never shows a job you are too young to hold. Age is a hard legal filter, not
+a preference, so a 15-year-old never sees an 18+ posting. For teens too young
+to work at all, the app carries competitions, programs, and volunteering that
+build a track record instead.
+```
+
+> **UPDATE THE NUMBER** after running the sweep in section 1.
+
+### Shorter alternative, 94 words
+
+```
+EmployTeens is a job search app for 14 to 18 year olds in New York and New
+Jersey. It matches teens to real openings using the things that actually
+decide whether a teenager can take a job: their legal working age, what time
+school ends, and how far they can travel without a car. Every application link
+is verified before it goes live and re-checked nightly, so nobody gets sent to
+a dead posting. For teens too young to work yet, it carries competitions and
+volunteering that build a track record instead.
+```
+
+---
+
+## 3. "What inspired you to create this app?"
+
+Nayan's story, first person on purpose. **Read the second paragraph and change
+anything that did not actually happen to you.** Do not submit a detail you
+cannot stand behind.
+
+```
+I wanted my own money at fourteen. Not an allowance. Money I earned.
+
+So I started applying, and I kept hitting the same wall in different shapes.
+Listings that said "no experience necessary" and then wanted eighteen. "Now
+hiring" links that went to a corporate careers page with nothing behind it for
+someone my age. Forms that let me fill out everything before telling me I was
+too young. Nobody ever says a fourteen-year-old cannot apply. They just build
+every door slightly too high and let you work it out yourself.
+
+I eventually got hired as a busser at Harry's Daughter, a restaurant in Jersey
+City. Not through any job site. Through an application I put together myself
+and handed to a person. That one job turned into more than a job. I ended up
+building their website and running their marketing, at fourteen, because
+somebody in a small business was willing to see what I could do.
+
+That is the whole idea behind EmployTeens. The hard part was never the work. It
+was getting one adult to give me a first chance, and getting to a door that was
+actually open.
+
+When we built the database, we checked: of 243 real job listings in our own
+system, not one is open to a fourteen-year-old. The youngest is fifteen. I was
+not failing that search. There was nothing in it for me.
+
+So the app does two things I needed and did not have. It never shows you a job
+you are not legally old enough to hold, and it gives younger teens somewhere to
+start building a record before anyone can hire them. It also pushes local small
+businesses up the list, because mine was the one that said yes.
+```
+
+---
+
+## 4. "What technical difficulties did you face programming your app?"
+
+The official rules word this as "what technical/coding difficulty did you face,
+**and how did you address this technical challenge?**" Both versions answer the
+second half, do not cut it.
 
 ### Full version
 
@@ -108,7 +194,7 @@ started reading the status line.
 
 ---
 
-## 3. "What improvements would you make for a 2.0 version?"
+## 5. "What improvements would you make for a 2.0 version?"
 
 ```
 The honest answer is supply, not features.
@@ -144,10 +230,42 @@ decides whether this is useful or just well built.
 
 ---
 
-## 4. "Did you use AI in the creation, development, or functionality of your app?"
+## 6. "What did you learn while participating in the CAC? What was your biggest takeaway?"
 
-Answer honestly and separate the two things. Judges respect disclosure and
-penalize vagueness.
+On the official question list. Easy to answer badly. Do not write "I learned a
+lot about coding."
+
+```
+The biggest thing we learned is that a bug that crashes is a gift, and a bug
+that returns success is the dangerous one.
+
+Our job link checker passed every test we had while quietly marking filled
+positions as healthy. Nothing errored. Nothing turned red. A teenager tapping
+one of those listings just landed on a page saying the role was gone, and we
+had no way of knowing. We only found it by opening our own app and clicking
+through listings like a user instead of like the people who built it.
+
+That changed how we work. We stopped asking "does the code run" and started
+asking "is what the screen says actually true." When we audited the whole app
+against that question we found more: listings claiming to be in Jersey City
+that were really in Newark, Camden, and one in Ontario, Canada. An age label
+that said "by law" about a number that had nothing to do with the law. A
+homepage counter that disagreed with the app by a factor of ten. Every one of
+those shipped with tests passing.
+
+The second thing we learned is that the hard part of this problem was never
+technical. We can filter a database in milliseconds. Getting a fourteen-year-old
+in front of an employer who will actually consider them is a people problem, and
+no amount of code solves it on its own.
+```
+
+---
+
+## 7. "Did you use AI in the creation, development, or functionality of your app?"
+
+The rules permit AI "provided that all AI usage is fully disclosed" and say it
+"must not constitute the entirety of the technical development." Separate the
+two uses. Judges respect disclosure and penalize vagueness.
 
 ```
 Yes, in two different ways.
@@ -174,7 +292,44 @@ understand the tool rather than depending on it.
 
 ---
 
-## 5. Demo video — voiceover script
+## 8. Checkbox questions
+
+### "Which programming language(s) did you use?"
+
+Check **JavaScript** and **Other**.
+
+In the Other box write: `TypeScript (primary), SQL (PostgreSQL)`
+
+TypeScript is not on their list, so JavaScript is the honest closest match and
+the write-in names it properly. A technical judge reads TypeScript as a
+stronger signal.
+
+Your actual code, excluding dependencies:
+
+| | Files | Lines |
+|---|---|---|
+| TypeScript (.ts + .tsx) | 138 | 25,494 |
+| SQL (schema + migrations) | 23 | 1,546 |
+| CSS | 1 | 634 |
+| Python | 1 | 56 |
+
+**Do not check Swift or Objective-C.** The 49 lines of `AppDelegate.swift` were
+generated by Capacitor. If a judge asks what Swift you wrote, there is nothing
+to show, and the rules let them request source code access.
+
+**Python is your call.** One 56-line icon-generation script. It is a build tool,
+not the app. Leaving it unchecked is cleaner.
+
+### "Which platform(s) did you code your app for?"
+
+Web app, and an installable PWA (`public/manifest.json` and `public/sw.js`
+exist). Only check iOS if you have actually built and run the Capacitor app on
+a device or simulator. Having `@capacitor/ios` as a dependency is not the same
+as shipping it.
+
+---
+
+## 9. Demo video — voiceover script
 
 **Format: screen recording with voiceover.** Every narration line must have
 something on screen at the moment it is spoken.
@@ -316,31 +471,3 @@ Record these as separate clips. Three takes each.
 
 ---
 
-## 6. "What did you learn while participating in the CAC? What was your biggest takeaway?"
-
-This question is on the official list and is easy to answer badly. Do not write
-"I learned a lot about coding."
-
-```
-The biggest thing we learned is that a bug that crashes is a gift, and a bug
-that returns success is the dangerous one.
-
-Our job link checker passed every test we had while quietly marking filled
-positions as healthy. Nothing errored. Nothing turned red. A teenager tapping
-one of those listings just landed on a page saying the role was gone, and we
-had no way of knowing. We only found it by opening our own app and clicking
-through listings like a user instead of like the people who built it.
-
-That changed how we work. We stopped asking "does the code run" and started
-asking "is what the screen says actually true." When we audited the whole app
-against that question we found more: listings claiming to be in Jersey City
-that were really in Newark, Camden, and one in Ontario, Canada. An age label
-that said "by law" about a number that had nothing to do with the law. A
-homepage counter that disagreed with the app by a factor of ten. Every one of
-those shipped with tests passing.
-
-The second thing we learned is that the hard part of this problem was never
-technical. We can filter a database in milliseconds. Getting a fourteen-year-old
-in front of an employer who will actually consider them is a people problem, and
-no amount of code solves it on its own.
-```

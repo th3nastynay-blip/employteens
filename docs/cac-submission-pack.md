@@ -1,6 +1,10 @@
 # Congressional App Challenge — submission pack
 
-Everything for the form plus the video. Due 25 October, evening.
+Everything for the form plus the video.
+
+> **DEADLINE: 12:00 PM EDT, Monday 26 October 2026.** Checked against the
+> official 2026 CAC rules PDF. Not Sunday night. After the submission period
+> closes the entry cannot be modified in any way.
 
 ---
 
@@ -172,13 +176,29 @@ understand the tool rather than depending on it.
 
 ## 5. Demo video — voiceover script
 
-**Format: screen recording with voiceover.** No talking heads. That means every
-line of narration must have something on screen at the moment it is spoken.
+**Format: screen recording with voiceover.** Every narration line must have
+something on screen at the moment it is spoken.
 
-Max 3 minutes. This runs about **2:20**. The narration is **278 words**, which
-is about 1:55 of actual speech at a normal pace. The remaining ~25 seconds is
-deliberate silence between sections where the screen carries it. Do not fill
-those gaps with talking; it reads as rushed and judges stop absorbing.
+### Rules, checked against the official 2026 CAC rules PDF
+
+- **1 to 3 minutes.** Going outside that range "may be penalized by the judges
+  at their discretion."
+- **Upload to YouTube or Vimeo and set it to PUBLIC.** Not unlisted. The rules
+  say this explicitly.
+- The video **must** contain all six of these:
+
+| Required | Where it is in the script below |
+|---|---|
+| The name(s) of each participant | 0:00 — both of you say your names |
+| The name of the app | 0:06 |
+| Purpose in **one clear sentence** | 0:08 — the single sentence, say it cleanly |
+| The app's target audience | 0:14 |
+| The tools and coding languages used | 0:20–0:34 |
+| Showcase the functionality | 0:34 onward |
+
+This script runs about **2:45**. Narration is 323 words, roughly 2:15 of actual
+speech, leaving ~30s of deliberate silence between sections. Comfortably inside
+the 1–3 minute window.
 
 Record on a **17-year-old profile**, never 14, or the feed looks empty.
 
@@ -187,69 +207,70 @@ Record on a **17-year-old profile**, never 14, or the feed looks empty.
 Do not talk and navigate at the same time. You will stumble and the pacing will
 be wrong.
 
-1. Record the screen **silent**, slowly, in one take per section. Move
-   deliberately. Pause for a full second on anything you want the viewer to read.
+1. Record the screen **silent**, slowly, one take per section. Pause a full
+   second on anything you want read.
 2. Rough-cut the silent footage to roughly these timings.
-3. Narrate **while watching the cut**, so your words land on the right frame.
-4. Say the line a half-second *before* the action, not after. "Tap apply" comes
-   just before the tap, so the viewer's eye is already there.
-
-### Splitting it between you
-
-Alternate by section. Two voices is how a judge knows it is a two-person team
-when nobody is on camera. Suggested split marked below, swap if you like, but
-make sure Mia narrates a section where she can speak to her own work.
+3. Narrate **while watching the cut**, so words land on the right frame.
+4. Say each line a half-second *before* the action, not after.
 
 ---
 
 ### Script
 
-**[0:00–0:14] SCREEN: landing page, slow scroll to the verified count**
-*Voice: Nayan*
+**[0:00–0:20] SCREEN: landing page, slow scroll to the verified count**
 
-> This is EmployTeens. It's a job app for teenagers in New York and New Jersey,
-> and I built it because when I was fourteen and looking for work, almost
-> nothing I found was a job I could actually take.
+> **NAYAN:** I'm Nayan Perkari.
+>
+> **MIA:** And I'm Mia [LAST NAME].
+>
+> **NAYAN:** This is EmployTeens. EmployTeens helps teenagers find jobs they
+> are legally old enough to take and that actually still exist. It's built for
+> fourteen to eighteen year olds in New York and New Jersey, who get almost
+> nothing useful from normal job sites.
 
-**[0:14–0:40] SCREEN: onboarding — age, then school end time, then transport**
-*Voice: Mia* · Pause on the school-time and transport screens
+**[0:20–0:34] SCREEN: keep scrolling the landing page, or show the app on a phone**
 
-> It starts with questions no other job site asks. How old are you. What time
-> does school let out. How do you actually get around. That last one sets how
-> far a job can be before it stops being realistic. If you walk, that's one
-> mile. A bike is three. A car is twenty-five.
+> **MIA:** We wrote it in TypeScript, using React and Next.js. The database is
+> PostgreSQL through Supabase, the interface is Tailwind CSS, it's deployed on
+> Vercel, and the career coach runs on Anthropic's Claude API.
 
-**[0:40–1:08] SCREEN: the feed scrolling, then one card expanded to "How it fits you"**
-*Voice: Nayan* · Stop scrolling while the breakdown is on screen
+**[0:34–0:58] SCREEN: onboarding — age, then school end time, then transport**
+Pause on the school-time and transport screens.
 
-> Here's the feed. Every card tells you why it matched, not just that it did.
-> Your schedule, the distance, your interests, how fast that employer hires.
-> Age isn't part of the score at all. It's a hard legal filter applied first, so
-> a fifteen-year-old never even sees an eighteen-plus job.
+> **NAYAN:** It starts with questions no other job site asks. How old are you.
+> What time does school let out. How do you actually get around. That last one
+> sets how far a job can be before it stops being realistic. If you walk, that's
+> one mile. A bike is three. A car is twenty-five.
 
-**[1:08–1:40] SCREEN: tap Apply → the employer's real page loads. Let it finish.**
-*Voice: Mia* · **Do not cut or speed this up. The whole video is this shot.**
+**[0:58–1:24] SCREEN: the feed scrolling, then one card expanded to "How it fits you"**
+Stop scrolling while the breakdown is on screen.
 
-> Tap apply, and you go straight to the employer's own application. Not a
-> middleman, not a careers homepage. Every one of these links gets verified
-> before the listing goes live, and re-checked every single night. If a link
-> dies, the listing disappears. Sending a teenager to a dead link is how they
-> decide the whole search is pointless.
+> **MIA:** Here's the feed. Every card tells you why it matched, not just that
+> it did. Your schedule, the distance, your interests, how fast that employer
+> hires. Age isn't part of the score at all. It's a hard legal filter applied
+> first, so a fifteen-year-old never even sees an eighteen-plus job.
 
-**[1:40–2:00] SCREEN: Explore tab, scroll the programs**
-*Voice: Nayan*
+**[1:24–1:56] SCREEN: tap Apply → the employer's real page loads. Let it finish.**
+**Do not cut or speed this up. The whole video is this shot.**
 
-> Fourteen and fifteen year olds mostly can't legally work yet. So they get
-> this instead. Competitions, programs, volunteering, each one picked because
-> finishing it leaves you something real.
+> **NAYAN:** Tap apply, and you go straight to the employer's own application.
+> Not a middleman, not a careers homepage. Every one of these links gets
+> verified before the listing goes live, and re-checked every single night. If a
+> link dies, the listing disappears. Sending a teenager to a dead link is how
+> they decide the whole search is pointless.
 
-**[2:00–2:20] SCREEN: the reference / vouch card**
-*Voice: Mia*
+**[1:56–2:16] SCREEN: Explore tab, scroll the programs**
 
-> Like this. You send your supervisor one link, they confirm it, and it becomes
-> the one part of your profile that somebody other than you vouched for. Nobody
-> hires a sixteen-year-old because of their resume. They hire because an adult
-> said they were worth it. That's what we built.
+> **MIA:** Fourteen and fifteen year olds mostly can't legally work yet. So they
+> get this instead. Competitions, programs, volunteering, each one picked
+> because finishing it leaves you something real.
+
+**[2:16–2:45] SCREEN: the reference / vouch card**
+
+> **NAYAN:** Like this. You send your supervisor one link, they confirm it, and
+> it becomes the one part of your profile that somebody other than you vouched
+> for. Nobody hires a sixteen-year-old because of their resume. They hire
+> because an adult said they were worth it. That's what we built.
 
 ---
 
@@ -259,12 +280,12 @@ Record these as separate clips. Three takes each.
 
 | # | Clip | Length | Note |
 |---|---|---|---|
-| 1 | Landing page, slow scroll | 15s | Make the verified count readable |
-| 2 | Onboarding: age → school time → transport | 30s | Pause 1s on each |
-| 3 | Feed scroll, then expand one card | 30s | Hold still on the fit breakdown |
+| 1 | Landing page, slow scroll | 35s | Covers the intro and the tools section |
+| 2 | Onboarding: age → school time → transport | 25s | Pause 1s on each |
+| 3 | Feed scroll, then expand one card | 28s | Hold still on the fit breakdown |
 | 4 | Tap Apply, employer page loads fully | 35s | **Longest take. Do not trim.** |
-| 5 | Explore tab scroll | 20s | |
-| 6 | Reference / vouch card | 20s | |
+| 5 | Explore tab scroll | 22s | |
+| 6 | Reference / vouch card | 30s | |
 
 ### Before you hit record
 
@@ -272,17 +293,54 @@ Record these as separate clips. Three takes each.
 - [ ] Set the demo profile to age 17
 - [ ] Fix the reference reading "JEan Grey," or do not show that screen
 - [ ] Do **not** tap the **Near me** chip, it reads 0
+- [ ] Get Mia's last name into the intro line
 - [ ] Do Not Disturb on, notifications off, battery above 50%
 - [ ] Record the **phone** screen. At laptop width the app is a narrow column in
       a lot of white space and it looks unfinished
 
+### After you record
+
+- [ ] Total runtime is between **1:00 and 3:00**
+- [ ] Upload to YouTube or Vimeo
+- [ ] **Set visibility to PUBLIC.** Not unlisted. This is an explicit rule
+- [ ] Open the link in a private window to confirm it plays without signing in
+
 ### Things that will cost you points
 
-- **Music under the voiceover.** Intro and outro only, if at all. Judges are
-  listening for your words.
-- **Fast scrolling.** If a viewer cannot read a card, the card may as well not
-  be there.
+- **Music under the voiceover.** Intro and outro only, if at all.
+- **Fast scrolling.** If a viewer cannot read a card, it may as well not be there.
 - **Trimming the Apply shot.** Those three seconds of a real employer page
   loading are the only proof you have that the listings are real.
 - **Saying numbers you did not check.** Pull the live figure right before you
   record.
+
+---
+
+## 6. "What did you learn while participating in the CAC? What was your biggest takeaway?"
+
+This question is on the official list and is easy to answer badly. Do not write
+"I learned a lot about coding."
+
+```
+The biggest thing we learned is that a bug that crashes is a gift, and a bug
+that returns success is the dangerous one.
+
+Our job link checker passed every test we had while quietly marking filled
+positions as healthy. Nothing errored. Nothing turned red. A teenager tapping
+one of those listings just landed on a page saying the role was gone, and we
+had no way of knowing. We only found it by opening our own app and clicking
+through listings like a user instead of like the people who built it.
+
+That changed how we work. We stopped asking "does the code run" and started
+asking "is what the screen says actually true." When we audited the whole app
+against that question we found more: listings claiming to be in Jersey City
+that were really in Newark, Camden, and one in Ontario, Canada. An age label
+that said "by law" about a number that had nothing to do with the law. A
+homepage counter that disagreed with the app by a factor of ten. Every one of
+those shipped with tests passing.
+
+The second thing we learned is that the hard part of this problem was never
+technical. We can filter a database in milliseconds. Getting a fourteen-year-old
+in front of an employer who will actually consider them is a people problem, and
+no amount of code solves it on its own.
+```

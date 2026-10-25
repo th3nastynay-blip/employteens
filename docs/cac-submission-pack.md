@@ -66,8 +66,9 @@ why it matched.
 
 It checks that jobs are real. Every application link is verified before it
 goes live and re-checked nightly. Anything that dies, redirects to a homepage,
-or says "no longer accepting applications" is removed. There are currently 243
-verified openings at employers like Wegmans, Five Below, and Eataly.
+or says "no longer accepting applications" is removed. There are currently 335
+verified openings at employers like Wegmans, Insomnia Cookies, and the City of
+New York.
 
 It never shows a job you are too young to hold. Age is a hard legal filter, not
 a preference, so a 15-year-old never sees an 18+ posting. For teens too young
@@ -75,7 +76,8 @@ to work at all, the app carries competitions, programs, and volunteering that
 build a track record instead.
 ```
 
-> **UPDATE THE NUMBER** after running the sweep in section 1.
+> **Numbers verified live 24 Oct, 10:40pm ET:** 335 verified openings, 156
+> link-checked that day, 148 of them paid. Re-check right before you submit.
 
 ### Shorter alternative, 94 words
 
@@ -117,7 +119,7 @@ That is the whole idea behind EmployTeens. The hard part was never the work. It
 was getting one adult to give me a first chance, and getting to a door that was
 actually open.
 
-When we built the database, we checked: of 243 real job listings in our own
+When we built the database, we checked: of 335 real job listings in our own
 system, not one is open to a fourteen-year-old. The youngest is fifteen. I was
 not failing that search. There was nothing in it for me.
 
@@ -428,6 +430,23 @@ Stop scrolling while the breakdown is on screen.
 > because an adult said they were worth it. That's what we built.
 
 ---
+
+### Use the Insomnia Cookies card for the Apply shot
+
+Verified end-to-end on 24 Oct. It is the second card on Explore and the best
+demo in the database:
+
+- Recognisable brand, real logo, "Hires fast" badge
+- Card reads: **Shift Leader · Insomnia Cookies · New York NY (Morningside Heights)**
+- Tapping Apply lands on `jobs.lever.co/insomniacookies/...` which reads
+  **Shift Leader · New York NY (Morningside Heights) · Part Time · On-Site**
+  with a live APPLY FOR THIS JOB button and the street address
+
+Title and location match line for line. That is the whole product proven in one
+tap.
+
+**Apply opens a new tab.** On iPhone the screen switches tabs. That looks good
+on camera, the handoff is unmistakable. Do not be thrown by it mid-take.
 
 ### Silent recording checklist, in order
 

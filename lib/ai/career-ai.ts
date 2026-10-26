@@ -224,6 +224,20 @@ ${jobContext.recentApplications.map((a) => `- ${a.title} at ${a.company}: ${a.st
 ` : ''}`
 }
 
+/**
+ * Groq model ID, overridable without a deploy.
+ *
+ * This was hardcoded to 'llama-3.3-70b-versatile', which Groq decommissioned
+ * on 2026-08-16. After that, every coach message that fell through to the
+ * fallback 404'd. Same reasoning as ANTHROPIC_MODEL in lib/ai/anthropic.ts:
+ * model IDs get retired on someone else's schedule and the failure mode is
+ * total, so the name belongs in an env var that can be changed in the Vercel
+ * dashboard without shipping code.
+ *
+ * Default is Groq's own recommended successor as of 2026-10-24.
+ */
+const GROQ_MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b'
+
 export async function getStreamingChatResponse(
   messages: ChatMessage[],
   userProfile?: UserProfile,
@@ -258,7 +272,7 @@ export async function getStreamingChatResponse(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           ...messages,
@@ -276,10 +290,23 @@ export async function getStreamingChatResponse(
   if (!groqRes.ok) {
     const errText = await groqRes.text()
     console.error('[Groq] HTTP error', groqRes.status, errText)
-    if (groqRes.status === 429) {
-      return getFallbackStream(messages[messages.length - 1]?.content ?? '')
-    }
-    return streamError(`AI error (${groqRes.status}): ${errText.slice(0, 150)}`)
+
+    // EVERY failure here degrades to the canned coach, never to raw API JSON.
+    //
+    // This used to special-case 429 and dump the provider's error body into
+    // the chat bubble for everything else. On 2026-10-24 a teen asking "how do
+    // I ask someone to be my reference without it being awkward?" got back:
+    //
+    //   AI error (404): {"error":{"message":"The model
+    //   llama-3.3-70b-versatile does not exist or you do not have access
+    //   to it.","type":"invalid_request_error",...
+    //
+    // Three things wrong with that. It is unreadable. It leaks our provider
+    // and model choice to anyone who can type into a text box. And it is the
+    // opposite of what this product promises everywhere else: the app does not
+    // show you something it cannot stand behind. A decommissioned model is our
+    // problem, not the teen's.
+    return getFallbackStream(messages[messages.length - 1]?.content ?? '')
   }
 
   // Groq returns standard OpenAI SSE — pass it straight through
@@ -293,20 +320,6 @@ export async function getStreamingChatResponse(
 }
 
 // Stream a plain error message as if it were an AI response
-function streamError(message: string): Response {
-  const encoder = new TextEncoder()
-  const stream = new ReadableStream({
-    start(controller) {
-      const chunk = `data: ${JSON.stringify({ choices: [{ delta: { content: message } }] })}\n\n`
-      controller.enqueue(encoder.encode(chunk))
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-      controller.close()
-    },
-  })
-  return new Response(stream, {
-    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-  })
-}
 
 function getFallbackStream(message: string): Response {
   const text = getFallbackResponse(message)

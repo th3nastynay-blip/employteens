@@ -272,12 +272,14 @@ two uses. Judges respect disclosure and penalize vagueness.
 ```
 Yes, in two different ways.
 
-Inside the app, we use Anthropic's Claude API for two features. The first is
-the career coach, where a teen can ask questions about working papers, what to
-say in an interview, or what to do next, and get an answer grounded in their
-own profile and the listings they have saved. The second is match explanations,
-the short "how this fits you" text on each card. Both are constrained to facts
-the app already holds. The model is never the source of a job, a pay rate, an
+Inside the app, we use Anthropic's Claude API for two features, with Groq as a
+fallback provider if Anthropic is unavailable. The first is the career coach,
+where a teen can ask questions about working papers, what to say in an
+interview, or what to do next, and get an answer grounded in their own profile
+and the listings they have saved. The second is match explanations, the short
+"how this fits you" text on each card. If both providers fail, the coach falls
+back to written answers we wrote ourselves rather than showing an error. All
+three paths are constrained to facts the app already holds. The model is never the source of a job, a pay rate, an
 age requirement, or a deadline, because a model that invents an employer detail
 is worse than no feature at all.
 

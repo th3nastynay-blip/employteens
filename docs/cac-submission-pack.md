@@ -272,14 +272,18 @@ two uses. Judges respect disclosure and penalize vagueness.
 ```
 Yes, in two different ways.
 
-Inside the app, we use Anthropic's Claude API for two features, with Groq as a
-fallback provider if Anthropic is unavailable. The first is the career coach,
-where a teen can ask questions about working papers, what to say in an
+Inside the app, we use a language model for two features. The first is the
+career coach, where a teen can ask about working papers, what to say in an
 interview, or what to do next, and get an answer grounded in their own profile
 and the listings they have saved. The second is match explanations, the short
-"how this fits you" text on each card. If both providers fail, the coach falls
-back to written answers we wrote ourselves rather than showing an error. All
-three paths are constrained to facts the app already holds. The model is never the source of a job, a pay rate, an
+"how this fits you" text on each card.
+
+We built the coach to run on two providers rather than one. It currently serves
+requests through Groq, and the code also supports Anthropic's Claude as a
+primary provider when an API key is configured. If both are unavailable it
+falls back to answers we wrote ourselves rather than showing an error, because
+a model ID being deprecated is our problem and not the user's. Every path is
+constrained to facts the app already holds. The model is never the source of a job, a pay rate, an
 age requirement, or a deadline, because a model that invents an employer detail
 is worse than no feature at all.
 
@@ -391,7 +395,7 @@ be wrong.
 
 > **MIA:** We wrote it in TypeScript, using React and Next.js. The database is
 > PostgreSQL through Supabase, the interface is Tailwind CSS, it's deployed on
-> Vercel, and the career coach runs on Anthropic's Claude API.
+> Vercel, and the career coach runs on a large language model through Groq.
 
 **[0:34–0:58] SCREEN: onboarding — age, then school end time, then transport**
 Pause on the school-time and transport screens.
